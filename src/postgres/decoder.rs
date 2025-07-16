@@ -361,10 +361,16 @@ impl PgOutputDecoder {
                     tuple.insert(column.name.clone(), parsed_value);
                 }
                 b'b' => {
-                    // Binary value (not implemented in MVP)
-                    return Err(Error::InvalidMessage {
-                        message: "Binary values not supported in MVP".to_string(),
-                    });
+                    // Binary value
+                    let value_len = cursor.get_i32();
+                    if value_len > 0 {
+                        let value_bytes = cursor.copy_to_bytes(value_len as usize);
+                        let parsed_value = parse_postgres_binary_value(&value_bytes, column.type_id);
+                        tuple.insert(column.name.clone(), parsed_value);
+                    } else {
+                        // NULL value (indicated by -1 length)
+                        tuple.insert(column.name.clone(), serde_json::Value::Null);
+                    }
                 }
                 _ => {
                     return Err(Error::InvalidMessage {
@@ -382,9 +388,13 @@ fn format_lsn(lsn: u64) -> String {
     format!("{:X}/{:X}", lsn >> 32, lsn & 0xFFFFFFFF)
 }
 
-fn parse_postgres_value(text: &str, type_id: u32) -> serde_json::Value {
-    // Common PostgreSQL type OIDs
+pub fn parse_postgres_value(text: &str, type_id: u32) -> serde_json::Value {
+    trace!("Parsing PostgreSQL value with type OID {}: {}", type_id, text);
+    
+    // PostgreSQL type OIDs reference:
+    // https://www.postgresql.org/docs/current/datatype-oid.html
     match type_id {
+        // Boolean types
         16 => {  // bool
             match text {
                 "t" => serde_json::Value::Bool(true),
@@ -392,23 +402,252 @@ fn parse_postgres_value(text: &str, type_id: u32) -> serde_json::Value {
                 _ => serde_json::Value::String(text.to_string()),
             }
         }
-        20 | 21 | 23 => {  // int8, int2, int4
+        
+        // Numeric types
+        20 => {  // int8 (bigint)
             text.parse::<i64>()
                 .map(serde_json::Value::from)
                 .unwrap_or_else(|_| serde_json::Value::String(text.to_string()))
         }
-        700 | 701 => {  // float4, float8
+        21 => {  // int2 (smallint)
+            text.parse::<i16>()
+                .map(|v| serde_json::Value::from(v as i64))
+                .unwrap_or_else(|_| serde_json::Value::String(text.to_string()))
+        }
+        23 => {  // int4 (integer)
+            text.parse::<i32>()
+                .map(|v| serde_json::Value::from(v as i64))
+                .unwrap_or_else(|_| serde_json::Value::String(text.to_string()))
+        }
+        26 => {  // oid
+            text.parse::<u32>()
+                .map(|v| serde_json::Value::from(v as i64))
+                .unwrap_or_else(|_| serde_json::Value::String(text.to_string()))
+        }
+        700 => {  // float4 (real)
+            text.parse::<f32>()
+                .map(|v| serde_json::Value::from(v as f64))
+                .unwrap_or_else(|_| serde_json::Value::String(text.to_string()))
+        }
+        701 => {  // float8 (double precision)
             text.parse::<f64>()
                 .map(serde_json::Value::from)
                 .unwrap_or_else(|_| serde_json::Value::String(text.to_string()))
         }
-        1184 => {  // timestamptz
-            // Keep as string for now, let consumers parse
+        1700 => {  // numeric/decimal
+            // Parse as string to preserve precision
+            // Consumers can parse with appropriate decimal library
             serde_json::Value::String(text.to_string())
         }
+        
+        // String types
+        18 | 19 | 25 | 1042 | 1043 => {  // char, name, text, bpchar (char(n)), varchar
+            serde_json::Value::String(text.to_string())
+        }
+        
+        // Date/Time types
+        1082 => {  // date
+            serde_json::Value::String(text.to_string())
+        }
+        1083 => {  // time
+            serde_json::Value::String(text.to_string())
+        }
+        1114 => {  // timestamp
+            serde_json::Value::String(text.to_string())
+        }
+        1184 => {  // timestamptz
+            serde_json::Value::String(text.to_string())
+        }
+        1186 => {  // interval
+            serde_json::Value::String(text.to_string())
+        }
+        1266 => {  // timetz
+            serde_json::Value::String(text.to_string())
+        }
+        
+        // UUID type
+        2950 => {  // uuid
+            serde_json::Value::String(text.to_string())
+        }
+        
+        // JSON types
+        114 | 3802 => {  // json, jsonb
+            // Try to parse as JSON, fall back to string if invalid
+            serde_json::from_str(text)
+                .unwrap_or_else(|_| serde_json::Value::String(text.to_string()))
+        }
+        
+        // Network types
+        650 | 869 => {  // cidr, inet
+            serde_json::Value::String(text.to_string())
+        }
+        774 => {  // macaddr
+            serde_json::Value::String(text.to_string())
+        }
+        829 => {  // macaddr8
+            serde_json::Value::String(text.to_string())
+        }
+        
+        // Array types (prefix with underscore)
+        1000 => {  // _bool
+            parse_array_value(text, 16)
+        }
+        1005 => {  // _int2
+            parse_array_value(text, 21)
+        }
+        1007 => {  // _int4
+            parse_array_value(text, 23)
+        }
+        1016 => {  // _int8
+            parse_array_value(text, 20)
+        }
+        1009 => {  // _text
+            parse_array_value(text, 25)
+        }
+        1015 => {  // _varchar
+            parse_array_value(text, 1043)
+        }
+        1021 => {  // _float4
+            parse_array_value(text, 700)
+        }
+        1022 => {  // _float8
+            parse_array_value(text, 701)
+        }
+        
+        // Other common types
+        2278 => {  // void
+            serde_json::Value::Null
+        }
+        2249 => {  // record
+            // Keep as string for complex types
+            serde_json::Value::String(text.to_string())
+        }
+        
         _ => {
             // Default: keep as string
+            debug!("Unknown PostgreSQL type OID {}, keeping as string", type_id);
             serde_json::Value::String(text.to_string())
+        }
+    }
+}
+
+// Helper function to parse PostgreSQL array values
+fn parse_array_value(text: &str, element_type_id: u32) -> serde_json::Value {
+    // PostgreSQL array format: {elem1,elem2,elem3} or {"elem 1","elem 2"}
+    if !text.starts_with('{') || !text.ends_with('}') {
+        return serde_json::Value::String(text.to_string());
+    }
+    
+    let inner = &text[1..text.len()-1];
+    if inner.is_empty() {
+        return serde_json::Value::Array(vec![]);
+    }
+    
+    // Simple parsing for common cases (doesn't handle all edge cases)
+    let elements: Vec<serde_json::Value> = if inner.contains('"') {
+        // Quoted elements - more complex parsing needed
+        // For now, return as string
+        return serde_json::Value::String(text.to_string());
+    } else {
+        // Simple comma-separated elements
+        inner.split(',')
+            .map(|elem| {
+                if elem == "NULL" {
+                    serde_json::Value::Null
+                } else {
+                    parse_postgres_value(elem, element_type_id)
+                }
+            })
+            .collect()
+    };
+    
+    serde_json::Value::Array(elements)
+}
+
+// Parse PostgreSQL binary format values
+pub fn parse_postgres_binary_value(data: &[u8], type_id: u32) -> serde_json::Value {
+    trace!("Parsing PostgreSQL binary value with type OID {}", type_id);
+    
+    // For MVP, we'll handle common binary types
+    // Full binary parsing requires postgres-protocol crate
+    match type_id {
+        16 => {  // bool
+            if data.len() >= 1 {
+                serde_json::Value::Bool(data[0] != 0)
+            } else {
+                serde_json::Value::Null
+            }
+        }
+        20 => {  // int8
+            if data.len() >= 8 {
+                let value = i64::from_be_bytes([
+                    data[0], data[1], data[2], data[3],
+                    data[4], data[5], data[6], data[7]
+                ]);
+                serde_json::Value::from(value)
+            } else {
+                serde_json::Value::Null
+            }
+        }
+        21 => {  // int2
+            if data.len() >= 2 {
+                let value = i16::from_be_bytes([data[0], data[1]]);
+                serde_json::Value::from(value as i64)
+            } else {
+                serde_json::Value::Null
+            }
+        }
+        23 => {  // int4
+            if data.len() >= 4 {
+                let value = i32::from_be_bytes([data[0], data[1], data[2], data[3]]);
+                serde_json::Value::from(value as i64)
+            } else {
+                serde_json::Value::Null
+            }
+        }
+        700 => {  // float4
+            if data.len() >= 4 {
+                let bits = u32::from_be_bytes([data[0], data[1], data[2], data[3]]);
+                let value = f32::from_bits(bits) as f64;
+                serde_json::Value::from(value)
+            } else {
+                serde_json::Value::Null
+            }
+        }
+        701 => {  // float8
+            if data.len() >= 8 {
+                let bits = u64::from_be_bytes([
+                    data[0], data[1], data[2], data[3],
+                    data[4], data[5], data[6], data[7]
+                ]);
+                let value = f64::from_bits(bits);
+                serde_json::Value::from(value)
+            } else {
+                serde_json::Value::Null
+            }
+        }
+        2950 => {  // uuid
+            if data.len() >= 16 {
+                // Format as standard UUID string
+                let uuid = format!(
+                    "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
+                    data[0], data[1], data[2], data[3],
+                    data[4], data[5],
+                    data[6], data[7],
+                    data[8], data[9],
+                    data[10], data[11], data[12], data[13], data[14], data[15]
+                );
+                serde_json::Value::String(uuid)
+            } else {
+                serde_json::Value::Null
+            }
+        }
+        _ => {
+            // For other types, encode as base64
+            debug!("Binary format for type OID {} not implemented, encoding as base64", type_id);
+            use base64::{Engine as _, engine::general_purpose};
+            let encoded = general_purpose::STANDARD.encode(data);
+            serde_json::Value::String(format!("base64:{}", encoded))
         }
     }
 }
