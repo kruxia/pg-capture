@@ -21,30 +21,34 @@ async fn test_end_to_end_replication() {
 
     // Setup test database and table
     let (client, test_config) = setup_test_database().await;
-    
+
     // Start replicator in background
     let mut replicator = Replicator::new(test_config.clone());
-    let replicator_handle = tokio::spawn(async move {
-        replicator.run().await
-    });
+    let replicator_handle = tokio::spawn(async move { replicator.run().await });
 
     // Give replicator time to start
     tokio::time::sleep(Duration::from_secs(2)).await;
 
     // Perform database operations
     let operations = vec![
-        ("INSERT", "INSERT INTO test_table (name, age) VALUES ('Alice', 30)"),
-        ("UPDATE", "UPDATE test_table SET age = 31 WHERE name = 'Alice'"),
+        (
+            "INSERT",
+            "INSERT INTO test_table (name, age) VALUES ('Alice', 30)",
+        ),
+        (
+            "UPDATE",
+            "UPDATE test_table SET age = 31 WHERE name = 'Alice'",
+        ),
         ("DELETE", "DELETE FROM test_table WHERE name = 'Alice'"),
     ];
 
     let mut expected_messages = HashMap::new();
-    
+
     for (op_type, sql) in operations {
         info!("Executing SQL: {}", sql);
         client.execute(sql, &[]).await.unwrap();
         expected_messages.insert(op_type.to_string(), true);
-        
+
         // Small delay to ensure message ordering
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
@@ -52,10 +56,10 @@ async fn test_end_to_end_replication() {
     // Consume messages from Kafka
     let consumer = create_test_consumer(&test_config.kafka).await;
     let mut received_ops = HashMap::new();
-    
+
     let timeout_duration = Duration::from_secs(10);
     let start = tokio::time::Instant::now();
-    
+
     while received_ops.len() < expected_messages.len() && start.elapsed() < timeout_duration {
         if let Ok(Ok(message)) = timeout(Duration::from_secs(1), consumer.recv()).await {
             if let Some(payload) = message.payload() {
@@ -63,13 +67,13 @@ async fn test_end_to_end_replication() {
                 let op = json["op"].as_str().unwrap();
                 info!("Received message with operation: {}", op);
                 received_ops.insert(op.to_string(), true);
-                
+
                 // Validate message structure
                 assert!(json["schema"].is_string());
                 assert!(json["table"].is_string());
                 assert!(json["ts_ms"].is_number());
                 assert!(json["source"].is_object());
-                
+
                 match op {
                     "INSERT" => {
                         assert!(json["before"].is_null());
@@ -113,18 +117,17 @@ async fn test_replicator_recovery() {
         .ok();
 
     let (client, test_config) = setup_test_database().await;
-    
+
     // Start replicator
     let mut replicator = Replicator::new(test_config.clone());
-    let handle = tokio::spawn(async move {
-        replicator.run().await
-    });
+    let handle = tokio::spawn(async move { replicator.run().await });
 
     // Wait for startup
     tokio::time::sleep(Duration::from_secs(2)).await;
 
     // Insert initial data
-    client.execute("INSERT INTO test_table (name, age) VALUES ('Bob', 25)", &[])
+    client
+        .execute("INSERT INTO test_table (name, age) VALUES ('Bob', 25)", &[])
         .await
         .unwrap();
 
@@ -136,23 +139,25 @@ async fn test_replicator_recovery() {
     tokio::time::sleep(Duration::from_secs(1)).await;
 
     // Insert more data while replicator is down
-    client.execute("INSERT INTO test_table (name, age) VALUES ('Charlie', 35)", &[])
+    client
+        .execute(
+            "INSERT INTO test_table (name, age) VALUES ('Charlie', 35)",
+            &[],
+        )
         .await
         .unwrap();
 
     // Restart replicator
     let mut replicator = Replicator::new(test_config.clone());
-    let _handle = tokio::spawn(async move {
-        replicator.run().await
-    });
+    let _handle = tokio::spawn(async move { replicator.run().await });
 
     // Verify both messages are eventually received
     let consumer = create_test_consumer(&test_config.kafka).await;
     let mut received_names = Vec::new();
-    
+
     let timeout_duration = Duration::from_secs(10);
     let start = tokio::time::Instant::now();
-    
+
     while received_names.len() < 2 && start.elapsed() < timeout_duration {
         if let Ok(Ok(message)) = timeout(Duration::from_secs(1), consumer.recv()).await {
             if let Some(payload) = message.payload() {
@@ -181,27 +186,31 @@ async fn test_checkpoint_persistence() {
         .ok();
 
     let (client, mut test_config) = setup_test_database().await;
-    
+
     // Use a specific checkpoint file for this test
-    let checkpoint_file = format!("/tmp/pg_capture_test_{}.checkpoint", 
-                                   std::process::id());
+    let checkpoint_file = format!("/tmp/pg_capture_test_{}.checkpoint", std::process::id());
     test_config.replication.checkpoint_file = Some(PathBuf::from(checkpoint_file.clone()));
 
     // Start replicator
     let mut replicator = Replicator::new(test_config.clone());
-    let handle = tokio::spawn(async move {
-        replicator.run().await
-    });
+    let handle = tokio::spawn(async move { replicator.run().await });
 
     // Wait for startup
     tokio::time::sleep(Duration::from_secs(2)).await;
 
     // Insert data
     for i in 0..5 {
-        client.execute(
-            &format!("INSERT INTO test_table (name, age) VALUES ('User{}', {})", i, i * 10),
-            &[]
-        ).await.unwrap();
+        client
+            .execute(
+                &format!(
+                    "INSERT INTO test_table (name, age) VALUES ('User{}', {})",
+                    i,
+                    i * 10
+                ),
+                &[],
+            )
+            .await
+            .unwrap();
         tokio::time::sleep(Duration::from_millis(200)).await;
     }
 
@@ -216,25 +225,30 @@ async fn test_checkpoint_persistence() {
 
     // Insert more data while replicator is down
     for i in 5..10 {
-        client.execute(
-            &format!("INSERT INTO test_table (name, age) VALUES ('User{}', {})", i, i * 10),
-            &[]
-        ).await.unwrap();
+        client
+            .execute(
+                &format!(
+                    "INSERT INTO test_table (name, age) VALUES ('User{}', {})",
+                    i,
+                    i * 10
+                ),
+                &[],
+            )
+            .await
+            .unwrap();
     }
 
     // Restart replicator - it should resume from checkpoint
     let mut replicator = Replicator::new(test_config.clone());
-    let _handle = tokio::spawn(async move {
-        replicator.run().await
-    });
+    let _handle = tokio::spawn(async move { replicator.run().await });
 
     // Consume all messages
     let consumer = create_test_consumer(&test_config.kafka).await;
     let mut user_numbers = Vec::new();
-    
+
     let timeout_duration = Duration::from_secs(15);
     let start = tokio::time::Instant::now();
-    
+
     while user_numbers.len() < 10 && start.elapsed() < timeout_duration {
         if let Ok(Ok(message)) = timeout(Duration::from_secs(1), consumer.recv()).await {
             if let Some(payload) = message.payload() {
@@ -281,8 +295,11 @@ async fn setup_test_database() -> (Client, Config) {
     let (client, connection) = tokio_postgres::connect(
         &format!(
             "host={} port={} dbname={} user={} password={}",
-            db_config.host, db_config.port, db_config.database, 
-            db_config.username, db_config.password
+            db_config.host,
+            db_config.port,
+            db_config.database,
+            db_config.username,
+            db_config.password
         ),
         NoTls,
     )
@@ -296,30 +313,46 @@ async fn setup_test_database() -> (Client, Config) {
     });
 
     // Clean up any existing test objects
-    client.execute(&format!("DROP PUBLICATION IF EXISTS {}", db_config.publication), &[])
-        .await.ok();
+    client
+        .execute(
+            &format!("DROP PUBLICATION IF EXISTS {}", db_config.publication),
+            &[],
+        )
+        .await
+        .ok();
     client.execute(&format!("SELECT pg_drop_replication_slot('{}') WHERE EXISTS (SELECT 1 FROM pg_replication_slots WHERE slot_name = '{}')", 
                            db_config.slot_name, db_config.slot_name), &[])
         .await.ok();
-    client.execute("DROP TABLE IF EXISTS test_table", &[])
-        .await.ok();
+    client
+        .execute("DROP TABLE IF EXISTS test_table", &[])
+        .await
+        .ok();
 
     // Create test table
-    client.execute(
-        "CREATE TABLE test_table (
+    client
+        .execute(
+            "CREATE TABLE test_table (
             id SERIAL PRIMARY KEY,
             name TEXT NOT NULL,
             age INTEGER NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )",
-        &[]
-    ).await.unwrap();
+            &[],
+        )
+        .await
+        .unwrap();
 
     // Create publication
-    client.execute(
-        &format!("CREATE PUBLICATION {} FOR TABLE test_table", db_config.publication),
-        &[]
-    ).await.unwrap();
+    client
+        .execute(
+            &format!(
+                "CREATE PUBLICATION {} FOR TABLE test_table",
+                db_config.publication
+            ),
+            &[],
+        )
+        .await
+        .unwrap();
 
     let kafka_config = KafkaConfig {
         brokers: vec!["localhost:9092".to_string()],
@@ -350,9 +383,15 @@ async fn setup_test_database() -> (Client, Config) {
 
 async fn cleanup_test_database(client: &Client) {
     let slot_name = format!("test_slot_{}", std::process::id());
-    
-    client.execute("DROP TABLE IF EXISTS test_table CASCADE", &[]).await.ok();
-    client.execute("DROP PUBLICATION IF EXISTS test_publication", &[]).await.ok();
+
+    client
+        .execute("DROP TABLE IF EXISTS test_table CASCADE", &[])
+        .await
+        .ok();
+    client
+        .execute("DROP PUBLICATION IF EXISTS test_publication", &[])
+        .await
+        .ok();
     client.execute(&format!("SELECT pg_drop_replication_slot('{}') WHERE EXISTS (SELECT 1 FROM pg_replication_slots WHERE slot_name = '{}')", 
                            slot_name, slot_name), &[])
         .await.ok();

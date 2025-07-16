@@ -12,10 +12,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Configuration - these would come from environment variables in production
     let connection_string = std::env::var("PG_REPLICATE_DATABASE_URL")
         .unwrap_or_else(|_| "postgres://postgres:postgres@localhost:5432/postgres".to_string());
-    let slot_name = std::env::var("PG_REPLICATE_SLOT_NAME")
-        .unwrap_or_else(|_| "test_slot".to_string());
-    let publication_name = std::env::var("PG_REPLICATE_PUBLICATION_NAME")
-        .unwrap_or_else(|_| "test_pub".to_string());
+    let slot_name =
+        std::env::var("PG_REPLICATE_SLOT_NAME").unwrap_or_else(|_| "test_slot".to_string());
+    let publication_name =
+        std::env::var("PG_REPLICATE_PUBLICATION_NAME").unwrap_or_else(|_| "test_pub".to_string());
 
     info!("Testing PostgreSQL Copy Both protocol implementation");
     info!("Connection string: {}", connection_string);
@@ -23,11 +23,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("Publication name: {}", publication_name);
 
     // Create replication connection
-    let mut conn = ReplicationConnection::new(
-        &connection_string,
-        slot_name,
-        publication_name
-    ).await?;
+    let mut conn =
+        ReplicationConnection::new(&connection_string, slot_name, publication_name).await?;
 
     // Identify system
     let system_info = conn.identify_system().await?;
@@ -43,12 +40,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Receive a few replication messages
     info!("Waiting for replication messages...");
     let mut message_count = 0;
-    
+
     while message_count < 5 {
         match tokio::time::timeout(
             std::time::Duration::from_secs(10),
-            conn.recv_replication_message()
-        ).await {
+            conn.recv_replication_message(),
+        )
+        .await
+        {
             Ok(Ok(Some(msg))) => {
                 info!("Received replication message with {} bytes", msg.data.len());
                 message_count += 1;

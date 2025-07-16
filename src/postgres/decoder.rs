@@ -2,8 +2,8 @@ use bytes::Buf;
 use std::collections::HashMap;
 use tracing::{debug, trace};
 
-use crate::{Error, Result};
 use super::types::{ChangeEvent, ChangeOperation, SourceMetadata};
+use crate::{Error, Result};
 
 #[derive(Debug, Clone)]
 pub struct RelationInfo {
@@ -36,7 +36,7 @@ impl PgOutputDecoder {
             database_name,
         }
     }
-    
+
     pub fn decode(&mut self, data: &[u8]) -> Result<Option<DecodedMessage>> {
         if data.is_empty() {
             return Ok(None);
@@ -48,7 +48,7 @@ impl PgOutputDecoder {
         }
 
         let mut cursor = &data[1..];
-        
+
         // Read XLogData header
         if cursor.remaining() < 24 {
             return Err(Error::InvalidMessage {
@@ -61,14 +61,14 @@ impl PgOutputDecoder {
         let _timestamp = cursor.get_i64();
 
         self.current_lsn = Some(format_lsn(end_lsn));
-        
+
         // Now decode the actual pgoutput message
         if cursor.is_empty() {
             return Ok(None);
         }
 
         let msg_type = cursor.get_u8();
-        
+
         match msg_type {
             b'B' => self.decode_begin(cursor),
             b'C' => self.decode_commit(cursor),
@@ -126,7 +126,7 @@ impl PgOutputDecoder {
 
         let rel_id = cursor.get_u32();
         let namespace_len = cursor.get_u8() as usize;
-        
+
         if cursor.remaining() < namespace_len {
             return Err(Error::InvalidMessage {
                 message: "Invalid namespace length".to_string(),
@@ -154,11 +154,15 @@ impl PgOutputDecoder {
         for _ in 0..num_columns {
             let flags = cursor.get_u8();
             let is_key = (flags & 1) != 0;
-            
+
             let col_name_len = cursor.get_u8() as usize;
             if cursor.remaining() < col_name_len {
                 return Err(Error::InvalidMessage {
-                    message: format!("Invalid column name length: {} (remaining: {})", col_name_len, cursor.remaining()),
+                    message: format!(
+                        "Invalid column name length: {} (remaining: {})",
+                        col_name_len,
+                        cursor.remaining()
+                    ),
                 });
             }
             let col_name = String::from_utf8_lossy(&cursor[..col_name_len]).to_string();
@@ -181,7 +185,10 @@ impl PgOutputDecoder {
             columns,
         };
 
-        debug!("RELATION: {}={}.{}", rel_id, relation.schema, relation.table);
+        debug!(
+            "RELATION: {}={}.{}",
+            rel_id, relation.schema, relation.table
+        );
         self.relations.insert(rel_id, relation);
 
         Ok(None)
@@ -203,9 +210,12 @@ impl PgOutputDecoder {
             });
         }
 
-        let relation = self.relations.get(&rel_id).ok_or_else(|| Error::InvalidMessage {
-            message: format!("Unknown relation ID: {}", rel_id),
-        })?;
+        let relation = self
+            .relations
+            .get(&rel_id)
+            .ok_or_else(|| Error::InvalidMessage {
+                message: format!("Unknown relation ID: {}", rel_id),
+            })?;
 
         let tuple_data = self.decode_tuple_data(&mut cursor, &relation.columns)?;
 
@@ -221,7 +231,8 @@ impl PgOutputDecoder {
                 relation.schema.clone(),
                 relation.table.clone(),
                 self.current_lsn.clone().unwrap_or_default(),
-            ).with_xid(self.current_xid.unwrap_or(0)),
+            )
+            .with_xid(self.current_xid.unwrap_or(0)),
         };
 
         Ok(Some(DecodedMessage::Change(event)))
@@ -235,9 +246,12 @@ impl PgOutputDecoder {
         }
 
         let rel_id = cursor.get_u32();
-        let relation = self.relations.get(&rel_id).ok_or_else(|| Error::InvalidMessage {
-            message: format!("Unknown relation ID: {}", rel_id),
-        })?;
+        let relation = self
+            .relations
+            .get(&rel_id)
+            .ok_or_else(|| Error::InvalidMessage {
+                message: format!("Unknown relation ID: {}", rel_id),
+            })?;
 
         let mut old_tuple = None;
         let mut new_tuple = None;
@@ -252,7 +266,8 @@ impl PgOutputDecoder {
                     if cursor.remaining() > 0 {
                         let next_type = cursor.get_u8();
                         if next_type == b'N' {
-                            new_tuple = Some(self.decode_tuple_data(&mut cursor, &relation.columns)?);
+                            new_tuple =
+                                Some(self.decode_tuple_data(&mut cursor, &relation.columns)?);
                         }
                     }
                 }
@@ -279,7 +294,8 @@ impl PgOutputDecoder {
                 relation.schema.clone(),
                 relation.table.clone(),
                 self.current_lsn.clone().unwrap_or_default(),
-            ).with_xid(self.current_xid.unwrap_or(0)),
+            )
+            .with_xid(self.current_xid.unwrap_or(0)),
         };
 
         Ok(Some(DecodedMessage::Change(event)))
@@ -301,9 +317,12 @@ impl PgOutputDecoder {
             });
         }
 
-        let relation = self.relations.get(&rel_id).ok_or_else(|| Error::InvalidMessage {
-            message: format!("Unknown relation ID: {}", rel_id),
-        })?;
+        let relation = self
+            .relations
+            .get(&rel_id)
+            .ok_or_else(|| Error::InvalidMessage {
+                message: format!("Unknown relation ID: {}", rel_id),
+            })?;
 
         let old_tuple = self.decode_tuple_data(&mut cursor, &relation.columns)?;
 
@@ -319,7 +338,8 @@ impl PgOutputDecoder {
                 relation.schema.clone(),
                 relation.table.clone(),
                 self.current_lsn.clone().unwrap_or_default(),
-            ).with_xid(self.current_xid.unwrap_or(0)),
+            )
+            .with_xid(self.current_xid.unwrap_or(0)),
         };
 
         Ok(Some(DecodedMessage::Change(event)))
@@ -331,12 +351,20 @@ impl PgOutputDecoder {
         Ok(None)
     }
 
-    fn decode_tuple_data(&self, cursor: &mut &[u8], columns: &[ColumnInfo]) -> Result<serde_json::Value> {
+    fn decode_tuple_data(
+        &self,
+        cursor: &mut &[u8],
+        columns: &[ColumnInfo],
+    ) -> Result<serde_json::Value> {
         let num_columns = cursor.get_u16();
-        
+
         if num_columns as usize != columns.len() {
             return Err(Error::InvalidMessage {
-                message: format!("Column count mismatch: {} vs {}", num_columns, columns.len()),
+                message: format!(
+                    "Column count mismatch: {} vs {}",
+                    num_columns,
+                    columns.len()
+                ),
             });
         }
 
@@ -344,7 +372,7 @@ impl PgOutputDecoder {
 
         for column in columns.iter() {
             let col_type = cursor.get_u8();
-            
+
             match col_type {
                 b'n' => {
                     // NULL value
@@ -360,7 +388,7 @@ impl PgOutputDecoder {
                     }
                     let value = String::from_utf8_lossy(&cursor[..len]).to_string();
                     cursor.advance(len);
-                    
+
                     // Try to parse as appropriate type based on PostgreSQL type OID
                     let parsed_value = parse_postgres_value(&value, column.type_id);
                     tuple.insert(column.name.clone(), parsed_value);
@@ -370,7 +398,8 @@ impl PgOutputDecoder {
                     let value_len = cursor.get_i32();
                     if value_len > 0 {
                         let value_bytes = cursor.copy_to_bytes(value_len as usize);
-                        let parsed_value = parse_postgres_binary_value(&value_bytes, column.type_id);
+                        let parsed_value =
+                            parse_postgres_binary_value(&value_bytes, column.type_id);
                         tuple.insert(column.name.clone(), parsed_value);
                     } else {
                         // NULL value (indicated by -1 length)
@@ -394,140 +423,174 @@ fn format_lsn(lsn: u64) -> String {
 }
 
 pub fn parse_postgres_value(text: &str, type_id: u32) -> serde_json::Value {
-    trace!("Parsing PostgreSQL value with type OID {}: {}", type_id, text);
-    
+    trace!(
+        "Parsing PostgreSQL value with type OID {}: {}",
+        type_id,
+        text
+    );
+
     // PostgreSQL type OIDs reference:
     // https://www.postgresql.org/docs/current/datatype-oid.html
     match type_id {
         // Boolean types
-        16 => {  // bool
+        16 => {
+            // bool
             match text {
                 "t" => serde_json::Value::Bool(true),
                 "f" => serde_json::Value::Bool(false),
                 _ => serde_json::Value::String(text.to_string()),
             }
         }
-        
+
         // Numeric types
-        20 => {  // int8 (bigint)
+        20 => {
+            // int8 (bigint)
             text.parse::<i64>()
                 .map(serde_json::Value::from)
                 .unwrap_or_else(|_| serde_json::Value::String(text.to_string()))
         }
-        21 => {  // int2 (smallint)
+        21 => {
+            // int2 (smallint)
             text.parse::<i16>()
                 .map(|v| serde_json::Value::from(v as i64))
                 .unwrap_or_else(|_| serde_json::Value::String(text.to_string()))
         }
-        23 => {  // int4 (integer)
+        23 => {
+            // int4 (integer)
             text.parse::<i32>()
                 .map(|v| serde_json::Value::from(v as i64))
                 .unwrap_or_else(|_| serde_json::Value::String(text.to_string()))
         }
-        26 => {  // oid
+        26 => {
+            // oid
             text.parse::<u32>()
                 .map(|v| serde_json::Value::from(v as i64))
                 .unwrap_or_else(|_| serde_json::Value::String(text.to_string()))
         }
-        700 => {  // float4 (real)
+        700 => {
+            // float4 (real)
             text.parse::<f32>()
                 .map(|v| serde_json::Value::from(v as f64))
                 .unwrap_or_else(|_| serde_json::Value::String(text.to_string()))
         }
-        701 => {  // float8 (double precision)
+        701 => {
+            // float8 (double precision)
             text.parse::<f64>()
                 .map(serde_json::Value::from)
                 .unwrap_or_else(|_| serde_json::Value::String(text.to_string()))
         }
-        1700 => {  // numeric/decimal
+        1700 => {
+            // numeric/decimal
             // Parse as string to preserve precision
             // Consumers can parse with appropriate decimal library
             serde_json::Value::String(text.to_string())
         }
-        
+
         // String types
-        18 | 19 | 25 | 1042 | 1043 => {  // char, name, text, bpchar (char(n)), varchar
+        18 | 19 | 25 | 1042 | 1043 => {
+            // char, name, text, bpchar (char(n)), varchar
             serde_json::Value::String(text.to_string())
         }
-        
+
         // Date/Time types
-        1082 => {  // date
+        1082 => {
+            // date
             serde_json::Value::String(text.to_string())
         }
-        1083 => {  // time
+        1083 => {
+            // time
             serde_json::Value::String(text.to_string())
         }
-        1114 => {  // timestamp
+        1114 => {
+            // timestamp
             serde_json::Value::String(text.to_string())
         }
-        1184 => {  // timestamptz
+        1184 => {
+            // timestamptz
             serde_json::Value::String(text.to_string())
         }
-        1186 => {  // interval
+        1186 => {
+            // interval
             serde_json::Value::String(text.to_string())
         }
-        1266 => {  // timetz
+        1266 => {
+            // timetz
             serde_json::Value::String(text.to_string())
         }
-        
+
         // UUID type
-        2950 => {  // uuid
+        2950 => {
+            // uuid
             serde_json::Value::String(text.to_string())
         }
-        
+
         // JSON types
-        114 | 3802 => {  // json, jsonb
+        114 | 3802 => {
+            // json, jsonb
             // Try to parse as JSON, fall back to string if invalid
             serde_json::from_str(text)
                 .unwrap_or_else(|_| serde_json::Value::String(text.to_string()))
         }
-        
+
         // Network types
-        650 | 869 => {  // cidr, inet
+        650 | 869 => {
+            // cidr, inet
             serde_json::Value::String(text.to_string())
         }
-        774 => {  // macaddr
+        774 => {
+            // macaddr
             serde_json::Value::String(text.to_string())
         }
-        829 => {  // macaddr8
+        829 => {
+            // macaddr8
             serde_json::Value::String(text.to_string())
         }
-        
+
         // Array types (prefix with underscore)
-        1000 => {  // _bool
+        1000 => {
+            // _bool
             parse_array_value(text, 16)
         }
-        1005 => {  // _int2
+        1005 => {
+            // _int2
             parse_array_value(text, 21)
         }
-        1007 => {  // _int4
+        1007 => {
+            // _int4
             parse_array_value(text, 23)
         }
-        1016 => {  // _int8
+        1016 => {
+            // _int8
             parse_array_value(text, 20)
         }
-        1009 => {  // _text
+        1009 => {
+            // _text
             parse_array_value(text, 25)
         }
-        1015 => {  // _varchar
+        1015 => {
+            // _varchar
             parse_array_value(text, 1043)
         }
-        1021 => {  // _float4
+        1021 => {
+            // _float4
             parse_array_value(text, 700)
         }
-        1022 => {  // _float8
+        1022 => {
+            // _float8
             parse_array_value(text, 701)
         }
-        
+
         // Other common types
-        2278 => {  // void
+        2278 => {
+            // void
             serde_json::Value::Null
         }
-        2249 => {  // record
+        2249 => {
+            // record
             // Keep as string for complex types
             serde_json::Value::String(text.to_string())
         }
-        
+
         _ => {
             // Default: keep as string
             debug!("Unknown PostgreSQL type OID {}, keeping as string", type_id);
@@ -542,12 +605,12 @@ fn parse_array_value(text: &str, element_type_id: u32) -> serde_json::Value {
     if !text.starts_with('{') || !text.ends_with('}') {
         return serde_json::Value::String(text.to_string());
     }
-    
-    let inner = &text[1..text.len()-1];
+
+    let inner = &text[1..text.len() - 1];
     if inner.is_empty() {
         return serde_json::Value::Array(vec![]);
     }
-    
+
     // Simple parsing for common cases (doesn't handle all edge cases)
     let elements: Vec<serde_json::Value> = if inner.contains('"') {
         // Quoted elements - more complex parsing needed
@@ -555,7 +618,8 @@ fn parse_array_value(text: &str, element_type_id: u32) -> serde_json::Value {
         return serde_json::Value::String(text.to_string());
     } else {
         // Simple comma-separated elements
-        inner.split(',')
+        inner
+            .split(',')
             .map(|elem| {
                 if elem == "NULL" {
                     serde_json::Value::Null
@@ -565,36 +629,38 @@ fn parse_array_value(text: &str, element_type_id: u32) -> serde_json::Value {
             })
             .collect()
     };
-    
+
     serde_json::Value::Array(elements)
 }
 
 // Parse PostgreSQL binary format values
 pub fn parse_postgres_binary_value(data: &[u8], type_id: u32) -> serde_json::Value {
     trace!("Parsing PostgreSQL binary value with type OID {}", type_id);
-    
+
     // For MVP, we'll handle common binary types
     // Full binary parsing requires postgres-protocol crate
     match type_id {
-        16 => {  // bool
+        16 => {
+            // bool
             if data.len() >= 1 {
                 serde_json::Value::Bool(data[0] != 0)
             } else {
                 serde_json::Value::Null
             }
         }
-        20 => {  // int8
+        20 => {
+            // int8
             if data.len() >= 8 {
                 let value = i64::from_be_bytes([
-                    data[0], data[1], data[2], data[3],
-                    data[4], data[5], data[6], data[7]
+                    data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7],
                 ]);
                 serde_json::Value::from(value)
             } else {
                 serde_json::Value::Null
             }
         }
-        21 => {  // int2
+        21 => {
+            // int2
             if data.len() >= 2 {
                 let value = i16::from_be_bytes([data[0], data[1]]);
                 serde_json::Value::from(value as i64)
@@ -602,7 +668,8 @@ pub fn parse_postgres_binary_value(data: &[u8], type_id: u32) -> serde_json::Val
                 serde_json::Value::Null
             }
         }
-        23 => {  // int4
+        23 => {
+            // int4
             if data.len() >= 4 {
                 let value = i32::from_be_bytes([data[0], data[1], data[2], data[3]]);
                 serde_json::Value::from(value as i64)
@@ -610,7 +677,8 @@ pub fn parse_postgres_binary_value(data: &[u8], type_id: u32) -> serde_json::Val
                 serde_json::Value::Null
             }
         }
-        700 => {  // float4
+        700 => {
+            // float4
             if data.len() >= 4 {
                 let bits = u32::from_be_bytes([data[0], data[1], data[2], data[3]]);
                 let value = f32::from_bits(bits) as f64;
@@ -619,11 +687,11 @@ pub fn parse_postgres_binary_value(data: &[u8], type_id: u32) -> serde_json::Val
                 serde_json::Value::Null
             }
         }
-        701 => {  // float8
+        701 => {
+            // float8
             if data.len() >= 8 {
                 let bits = u64::from_be_bytes([
-                    data[0], data[1], data[2], data[3],
-                    data[4], data[5], data[6], data[7]
+                    data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7],
                 ]);
                 let value = f64::from_bits(bits);
                 serde_json::Value::from(value)
@@ -631,7 +699,8 @@ pub fn parse_postgres_binary_value(data: &[u8], type_id: u32) -> serde_json::Val
                 serde_json::Value::Null
             }
         }
-        2950 => {  // uuid
+        2950 => {
+            // uuid
             if data.len() >= 16 {
                 // Format as standard UUID string
                 let uuid = format!(
@@ -649,8 +718,11 @@ pub fn parse_postgres_binary_value(data: &[u8], type_id: u32) -> serde_json::Val
         }
         _ => {
             // For other types, encode as base64
-            debug!("Binary format for type OID {} not implemented, encoding as base64", type_id);
-            use base64::{Engine as _, engine::general_purpose};
+            debug!(
+                "Binary format for type OID {} not implemented, encoding as base64",
+                type_id
+            );
+            use base64::{engine::general_purpose, Engine as _};
             let encoded = general_purpose::STANDARD.encode(data);
             serde_json::Value::String(format!("base64:{}", encoded))
         }

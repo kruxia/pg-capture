@@ -12,5 +12,5 @@ pub mod test_utils;
 mod type_parser_tests;
 
 pub use connection::{ReplicationConnection, ReplicationMessage, SystemInfo};
-pub use decoder::{PgOutputDecoder, DecodedMessage, RelationInfo, ColumnInfo};
+pub use decoder::{ColumnInfo, DecodedMessage, PgOutputDecoder, RelationInfo};
 pub use types::*;

@@ -2,12 +2,12 @@
 mod tests {
     use super::super::decoder::*;
     use super::super::types::ChangeOperation;
-    use bytes::{Bytes, BytesMut, BufMut};
-    
+    use bytes::{BufMut, Bytes, BytesMut};
+
     fn create_decoder() -> PgOutputDecoder {
         PgOutputDecoder::new("testdb".to_string())
     }
-    
+
     fn create_xlogdata_header(lsn: u64, timestamp: i64) -> BytesMut {
         let mut buf = BytesMut::new();
         buf.put_u8(b'w'); // XLogData tag
@@ -16,7 +16,7 @@ mod tests {
         buf.put_i64(timestamp); // Timestamp (microseconds since 2000-01-01)
         buf
     }
-    
+
     fn create_begin_message(xid: u32, lsn: u64) -> Bytes {
         let mut buf = create_xlogdata_header(lsn, 0);
         buf.put_u8(b'B'); // BEGIN
@@ -25,7 +25,7 @@ mod tests {
         buf.put_u32(xid); // XID
         buf.freeze()
     }
-    
+
     fn create_commit_message(lsn: u64) -> Bytes {
         let mut buf = create_xlogdata_header(lsn, 0);
         buf.put_u8(b'C'); // COMMIT
@@ -35,8 +35,13 @@ mod tests {
         buf.put_i64(0); // Timestamp
         buf.freeze()
     }
-    
-    fn create_relation_message(rel_id: u32, schema: &str, table: &str, columns: Vec<(&str, u32, bool)>) -> Bytes {
+
+    fn create_relation_message(
+        rel_id: u32,
+        schema: &str,
+        table: &str,
+        columns: Vec<(&str, u32, bool)>,
+    ) -> Bytes {
         let mut buf = create_xlogdata_header(0, 0);
         buf.put_u8(b'R'); // RELATION
         buf.put_u32(rel_id);
@@ -46,7 +51,7 @@ mod tests {
         buf.put(table.as_bytes());
         buf.put_u8(b'n'); // replica identity
         buf.put_u16(columns.len() as u16);
-        
+
         for (name, type_id, is_key) in columns {
             buf.put_u8(if is_key { 1 } else { 0 });
             buf.put_u8(name.len() as u8);
@@ -54,17 +59,17 @@ mod tests {
             buf.put_u32(type_id);
             buf.put_i32(-1); // type modifier
         }
-        
+
         buf.freeze()
     }
-    
+
     fn create_insert_message(rel_id: u32, values: Vec<(&str, Option<&str>)>) -> Bytes {
         let mut buf = create_xlogdata_header(0, 0);
         buf.put_u8(b'I'); // INSERT
         buf.put_u32(rel_id);
         buf.put_u8(b'N'); // new tuple
         buf.put_u16(values.len() as u16);
-        
+
         for (_, value) in values {
             match value {
                 Some(v) => {
@@ -77,19 +82,23 @@ mod tests {
                 }
             }
         }
-        
+
         buf.freeze()
     }
-    
-    fn create_update_message(rel_id: u32, old_values: Option<Vec<(&str, Option<&str>)>>, new_values: Vec<(&str, Option<&str>)>) -> Bytes {
+
+    fn create_update_message(
+        rel_id: u32,
+        old_values: Option<Vec<(&str, Option<&str>)>>,
+        new_values: Vec<(&str, Option<&str>)>,
+    ) -> Bytes {
         let mut buf = create_xlogdata_header(0, 0);
         buf.put_u8(b'U'); // UPDATE
         buf.put_u32(rel_id);
-        
+
         if let Some(old) = old_values {
             buf.put_u8(b'O'); // old tuple
             buf.put_u16(old.len() as u16);
-            
+
             for (_, value) in old {
                 match value {
                     Some(v) => {
@@ -103,10 +112,10 @@ mod tests {
                 }
             }
         }
-        
+
         buf.put_u8(b'N'); // new tuple
         buf.put_u16(new_values.len() as u16);
-        
+
         for (_, value) in new_values {
             match value {
                 Some(v) => {
@@ -119,17 +128,17 @@ mod tests {
                 }
             }
         }
-        
+
         buf.freeze()
     }
-    
+
     fn create_delete_message(rel_id: u32, key_values: Vec<(&str, Option<&str>)>) -> Bytes {
         let mut buf = create_xlogdata_header(0, 0);
         buf.put_u8(b'D'); // DELETE
         buf.put_u32(rel_id);
         buf.put_u8(b'K'); // key tuple
         buf.put_u16(key_values.len() as u16);
-        
+
         for (_, value) in key_values {
             match value {
                 Some(v) => {
@@ -142,15 +151,15 @@ mod tests {
                 }
             }
         }
-        
+
         buf.freeze()
     }
-    
+
     #[test]
     fn test_decode_begin_message() {
         let mut decoder = create_decoder();
         let msg = create_begin_message(12345, 1000);
-        
+
         let result = decoder.decode(&msg).unwrap();
         match result {
             Some(DecodedMessage::Begin { xid }) => {
@@ -159,12 +168,12 @@ mod tests {
             _ => panic!("Expected Begin message"),
         }
     }
-    
+
     #[test]
     fn test_decode_commit_message() {
         let mut decoder = create_decoder();
         let msg = create_commit_message(2000);
-        
+
         let result = decoder.decode(&msg).unwrap();
         match result {
             Some(DecodedMessage::Commit) => {
@@ -173,7 +182,7 @@ mod tests {
             _ => panic!("Expected Commit message"),
         }
     }
-    
+
     #[test]
     fn test_decode_relation_message() {
         let mut decoder = create_decoder();
@@ -183,27 +192,23 @@ mod tests {
             ("active", 16, false), // bool
         ];
         let msg = create_relation_message(100, "public", "users", columns);
-        
+
         let result = decoder.decode(&msg);
         assert!(result.is_ok());
         assert!(result.unwrap().is_none()); // RELATION messages don't produce output
-        
+
         // Verify relation was stored (we can't directly check, but subsequent messages will use it)
     }
-    
+
     #[test]
     fn test_decode_insert_message() {
         let mut decoder = create_decoder();
-        
+
         // First register the relation
-        let columns = vec![
-            ("id", 23, true),
-            ("name", 25, false),
-            ("active", 16, false),
-        ];
+        let columns = vec![("id", 23, true), ("name", 25, false), ("active", 16, false)];
         let rel_msg = create_relation_message(100, "public", "users", columns);
         decoder.decode(&rel_msg).unwrap();
-        
+
         // Now decode INSERT
         let values = vec![
             ("id", Some("42")),
@@ -211,7 +216,7 @@ mod tests {
             ("active", Some("t")),
         ];
         let insert_msg = create_insert_message(100, values);
-        
+
         let result = decoder.decode(&insert_msg).unwrap();
         match result {
             Some(DecodedMessage::Change(event)) => {
@@ -219,7 +224,7 @@ mod tests {
                 assert_eq!(event.table, "users");
                 assert!(matches!(event.op, ChangeOperation::Insert));
                 assert!(event.before.is_none());
-                
+
                 let after = event.after.unwrap();
                 assert_eq!(after["id"], 42);
                 assert_eq!(after["name"], "John Doe");
@@ -228,20 +233,16 @@ mod tests {
             _ => panic!("Expected Change message"),
         }
     }
-    
+
     #[test]
     fn test_decode_update_message() {
         let mut decoder = create_decoder();
-        
+
         // First register the relation
-        let columns = vec![
-            ("id", 23, true),
-            ("name", 25, false),
-            ("email", 25, false),
-        ];
+        let columns = vec![("id", 23, true), ("name", 25, false), ("email", 25, false)];
         let rel_msg = create_relation_message(200, "public", "contacts", columns);
         decoder.decode(&rel_msg).unwrap();
-        
+
         // Decode UPDATE with old and new values
         let old_values = vec![
             ("id", Some("10")),
@@ -254,16 +255,16 @@ mod tests {
             ("email", Some("new@example.com")),
         ];
         let update_msg = create_update_message(200, Some(old_values), new_values);
-        
+
         let result = decoder.decode(&update_msg).unwrap();
         match result {
             Some(DecodedMessage::Change(event)) => {
                 assert!(matches!(event.op, ChangeOperation::Update));
-                
+
                 let before = event.before.unwrap();
                 assert_eq!(before["name"], "Old Name");
                 assert_eq!(before["email"], "old@example.com");
-                
+
                 let after = event.after.unwrap();
                 assert_eq!(after["name"], "New Name");
                 assert_eq!(after["email"], "new@example.com");
@@ -271,32 +272,26 @@ mod tests {
             _ => panic!("Expected Change message"),
         }
     }
-    
+
     #[test]
     fn test_decode_delete_message() {
         let mut decoder = create_decoder();
-        
+
         // First register the relation
-        let columns = vec![
-            ("id", 23, true),
-            ("name", 25, false),
-        ];
+        let columns = vec![("id", 23, true), ("name", 25, false)];
         let rel_msg = create_relation_message(300, "public", "items", columns);
         decoder.decode(&rel_msg).unwrap();
-        
+
         // Decode DELETE
-        let key_values = vec![
-            ("id", Some("99")),
-            ("name", Some("Deleted Item")),
-        ];
+        let key_values = vec![("id", Some("99")), ("name", Some("Deleted Item"))];
         let delete_msg = create_delete_message(300, key_values);
-        
+
         let result = decoder.decode(&delete_msg).unwrap();
         match result {
             Some(DecodedMessage::Change(event)) => {
                 assert!(matches!(event.op, ChangeOperation::Delete));
                 assert!(event.after.is_none());
-                
+
                 let before = event.before.unwrap();
                 assert_eq!(before["id"], 99);
                 assert_eq!(before["name"], "Deleted Item");
@@ -304,27 +299,27 @@ mod tests {
             _ => panic!("Expected Change message"),
         }
     }
-    
+
     #[test]
     fn test_type_conversions() {
         let mut decoder = create_decoder();
-        
+
         // Register relation with various types
         let columns = vec![
-            ("bool_col", 16, false),      // bool
-            ("int2_col", 21, false),      // smallint
-            ("int4_col", 23, false),      // integer
-            ("int8_col", 20, false),      // bigint
-            ("float4_col", 700, false),   // real
-            ("float8_col", 701, false),   // double
-            ("text_col", 25, false),      // text
-            ("json_col", 114, false),     // json
-            ("uuid_col", 2950, false),    // uuid
+            ("bool_col", 16, false),        // bool
+            ("int2_col", 21, false),        // smallint
+            ("int4_col", 23, false),        // integer
+            ("int8_col", 20, false),        // bigint
+            ("float4_col", 700, false),     // real
+            ("float8_col", 701, false),     // double
+            ("text_col", 25, false),        // text
+            ("json_col", 114, false),       // json
+            ("uuid_col", 2950, false),      // uuid
             ("timestamp_col", 1114, false), // timestamp
         ];
         let rel_msg = create_relation_message(400, "public", "types_test", columns);
         decoder.decode(&rel_msg).unwrap();
-        
+
         // Insert with various values
         let values = vec![
             ("bool_col", Some("t")),
@@ -339,7 +334,7 @@ mod tests {
             ("timestamp_col", Some("2023-10-15 10:30:00")),
         ];
         let insert_msg = create_insert_message(400, values);
-        
+
         let result = decoder.decode(&insert_msg).unwrap();
         match result {
             Some(DecodedMessage::Change(event)) => {
@@ -360,26 +355,20 @@ mod tests {
             _ => panic!("Expected Change message"),
         }
     }
-    
+
     #[test]
     fn test_null_values() {
         let mut decoder = create_decoder();
-        
+
         // Register relation
-        let columns = vec![
-            ("id", 23, true),
-            ("optional_field", 25, false),
-        ];
+        let columns = vec![("id", 23, true), ("optional_field", 25, false)];
         let rel_msg = create_relation_message(500, "public", "nullable_test", columns);
         decoder.decode(&rel_msg).unwrap();
-        
+
         // Insert with NULL value
-        let values = vec![
-            ("id", Some("1")),
-            ("optional_field", None),
-        ];
+        let values = vec![("id", Some("1")), ("optional_field", None)];
         let insert_msg = create_insert_message(500, values);
-        
+
         let result = decoder.decode(&insert_msg).unwrap();
         match result {
             Some(DecodedMessage::Change(event)) => {
@@ -390,11 +379,11 @@ mod tests {
             _ => panic!("Expected Change message"),
         }
     }
-    
+
     #[test]
     fn test_array_parsing() {
         let mut decoder = create_decoder();
-        
+
         // Register relation with array types
         let columns = vec![
             ("int_array", 1007, false),  // _int4
@@ -402,14 +391,14 @@ mod tests {
         ];
         let rel_msg = create_relation_message(600, "public", "array_test", columns);
         decoder.decode(&rel_msg).unwrap();
-        
+
         // Insert with array values
         let values = vec![
             ("int_array", Some("{1,2,3,4,5}")),
             ("text_array", Some("{hello,world}")),
         ];
         let insert_msg = create_insert_message(600, values);
-        
+
         let result = decoder.decode(&insert_msg).unwrap();
         match result {
             Some(DecodedMessage::Change(event)) => {
@@ -418,7 +407,7 @@ mod tests {
                 assert!(int_array.is_array());
                 assert_eq!(int_array[0], 1);
                 assert_eq!(int_array[4], 5);
-                
+
                 let text_array = &after["text_array"];
                 assert!(text_array.is_array());
                 assert_eq!(text_array[0], "hello");
@@ -427,38 +416,38 @@ mod tests {
             _ => panic!("Expected Change message"),
         }
     }
-    
+
     #[test]
     fn test_binary_value_decoding() {
         let mut decoder = create_decoder();
-        
+
         // Register relation
         let columns = vec![
-            ("id", 23, true),       // int4
-            ("data", 16, false),    // bool (binary)
+            ("id", 23, true),    // int4
+            ("data", 16, false), // bool (binary)
         ];
         let rel_msg = create_relation_message(700, "public", "binary_test", columns);
         decoder.decode(&rel_msg).unwrap();
-        
+
         // Create INSERT with binary value
         let mut buf = create_xlogdata_header(0, 0);
         buf.put_u8(b'I'); // INSERT
         buf.put_u32(700); // rel_id
         buf.put_u8(b'N'); // new tuple
-        buf.put_u16(2);   // num columns
-        
+        buf.put_u16(2); // num columns
+
         // id column (text)
         buf.put_u8(b't');
         buf.put_i32(1);
         buf.put_u8(b'1');
-        
+
         // data column (binary bool)
         buf.put_u8(b'b');
         buf.put_i32(1); // 1 byte
-        buf.put_u8(1);  // true
-        
+        buf.put_u8(1); // true
+
         let insert_msg = buf.freeze();
-        
+
         let result = decoder.decode(&insert_msg).unwrap();
         match result {
             Some(DecodedMessage::Change(event)) => {
@@ -469,23 +458,23 @@ mod tests {
             _ => panic!("Expected Change message"),
         }
     }
-    
+
     #[test]
     fn test_error_handling() {
         let mut decoder = create_decoder();
-        
+
         // Test empty data
         assert!(decoder.decode(&[]).unwrap().is_none());
-        
+
         // Test invalid tag
         let invalid = vec![b'x', 1, 2, 3];
         assert!(decoder.decode(&invalid).unwrap().is_none());
-        
+
         // Test truncated message
         let truncated = create_begin_message(123, 456);
         let truncated = &truncated[..10]; // Cut off message
         assert!(decoder.decode(truncated).is_err());
-        
+
         // Test unknown relation ID
         let insert_msg = create_insert_message(999, vec![("id", Some("1"))]);
         assert!(decoder.decode(&insert_msg).is_err());

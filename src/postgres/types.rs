@@ -45,7 +45,7 @@ impl SourceMetadata {
             xid: None,
         }
     }
-    
+
     pub fn with_xid(mut self, xid: u32) -> Self {
         self.xid = Some(xid);
         self

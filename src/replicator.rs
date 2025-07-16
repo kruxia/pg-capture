@@ -1,12 +1,12 @@
-use crate::{Config, Result, Error};
-use crate::postgres::{ReplicationConnection, DecodedMessage, PgOutputDecoder, ReplicationMessage};
-use crate::kafka::{KafkaProducer, JsonSerializer, KeyStrategy, SerializationFormat, TopicManager};
 use crate::checkpoint::{Checkpoint, CheckpointManager};
+use crate::kafka::{JsonSerializer, KafkaProducer, KeyStrategy, SerializationFormat, TopicManager};
+use crate::postgres::{DecodedMessage, PgOutputDecoder, ReplicationConnection, ReplicationMessage};
+use crate::{Config, Error, Result};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::mpsc;
 use tokio::signal;
-use tracing::{info, warn, error, instrument};
+use tokio::sync::mpsc;
+use tracing::{error, info, instrument, warn};
 
 pub struct Replicator {
     config: Config,
@@ -23,11 +23,13 @@ pub struct Replicator {
 impl Replicator {
     pub fn new(config: Config) -> Self {
         // Use checkpoint path from config, or default to checkpoint.json
-        let checkpoint_path = config.replication.checkpoint_file
+        let checkpoint_path = config
+            .replication
+            .checkpoint_file
             .clone()
             .unwrap_or_else(|| std::path::PathBuf::from("checkpoint.json"));
-        
-        Self { 
+
+        Self {
             config,
             postgres_conn: None,
             kafka_producer: None,
@@ -39,27 +41,27 @@ impl Replicator {
             total_message_count: 0,
         }
     }
-    
+
     #[instrument(skip(self))]
     pub async fn run(&mut self) -> Result<()> {
         info!("Replicator starting");
-        
+
         // Set up shutdown handling
         let (shutdown_tx, shutdown_rx) = mpsc::channel(1);
         self.shutdown_receiver = Some(shutdown_rx);
-        
+
         // Spawn task to handle shutdown signals
         tokio::spawn(async move {
             let _ = signal::ctrl_c().await;
             info!("Shutdown signal received");
             let _ = shutdown_tx.send(()).await;
         });
-        
+
         // Run with retry logic
         let mut retry_count = 0;
         let max_retries = 5;
         let base_delay = Duration::from_secs(1);
-        
+
         loop {
             match self.run_with_retry().await {
                 Ok(()) => {
@@ -72,19 +74,21 @@ impl Replicator {
                 }
                 Err(e) => {
                     retry_count += 1;
-                    
+
                     if retry_count > max_retries {
                         error!("Maximum retries ({}) exceeded, giving up", max_retries);
                         return Err(e);
                     }
-                    
+
                     // Exponential backoff: 1s, 2s, 4s, 8s, 16s
                     let delay = base_delay * 2u32.pow(retry_count.min(4) - 1);
-                    error!("Replication failed: {}. Retrying in {:?} (attempt {}/{})", 
-                           e, delay, retry_count, max_retries);
-                    
+                    error!(
+                        "Replication failed: {}. Retrying in {:?} (attempt {}/{})",
+                        e, delay, retry_count, max_retries
+                    );
+
                     tokio::time::sleep(delay).await;
-                    
+
                     // Reset connections for retry
                     self.postgres_conn = None;
                     self.kafka_producer = None;
@@ -94,51 +98,59 @@ impl Replicator {
             }
         }
     }
-    
+
     async fn run_with_retry(&mut self) -> Result<()> {
         // Initialize connections
         self.initialize_connections().await?;
-        
+
         // Run the main replication loop
         self.replication_loop().await
     }
-    
+
     async fn initialize_connections(&mut self) -> Result<()> {
         info!("Initializing PostgreSQL connection");
-        
+
         // Create PostgreSQL replication connection
         let mut pg_conn = ReplicationConnection::new(
             &self.config.postgres_url(),
             self.config.postgres.slot_name.clone(),
             self.config.postgres.publication.clone(),
-        ).await?;
-        
+        )
+        .await?;
+
         // Get system info and create slot if needed
         let system_info = pg_conn.identify_system().await?;
         info!("Connected to PostgreSQL: {:?}", system_info);
-        
+
         // Create replication slot if it doesn't exist
         match pg_conn.create_replication_slot().await {
-            Ok(_) => info!("Created replication slot '{}'", self.config.postgres.slot_name),
+            Ok(_) => info!(
+                "Created replication slot '{}'",
+                self.config.postgres.slot_name
+            ),
             Err(e) => {
                 if e.to_string().contains("already exists") {
-                    info!("Replication slot '{}' already exists", self.config.postgres.slot_name);
+                    info!(
+                        "Replication slot '{}' already exists",
+                        self.config.postgres.slot_name
+                    );
                 } else {
                     return Err(e);
                 }
             }
         }
-        
+
         self.postgres_conn = Some(pg_conn);
-        
+
         info!("Initializing Kafka producer");
-        
+
         // Create Kafka producer
-        let kafka_producer = Arc::new(
-            KafkaProducer::new(&self.config.kafka.brokers, &self.config.kafka)?
-        );
+        let kafka_producer = Arc::new(KafkaProducer::new(
+            &self.config.kafka.brokers,
+            &self.config.kafka,
+        )?);
         self.kafka_producer = Some(kafka_producer);
-        
+
         // Create topic manager
         let topic_manager = TopicManager::new(
             &self.config.kafka.brokers,
@@ -146,34 +158,43 @@ impl Replicator {
             1, // Default replication factor
         )?;
         self.topic_manager = Some(topic_manager);
-        
+
         // Create decoder
         let decoder = PgOutputDecoder::new(self.config.postgres.database.clone());
         self.decoder = Some(decoder);
-        
+
         info!("Connections initialized successfully");
         Ok(())
     }
-    
+
     #[instrument(skip(self))]
     async fn replication_loop(&mut self) -> Result<()> {
-        let pg_conn = self.postgres_conn.as_mut()
-            .ok_or_else(|| Error::Connection("PostgreSQL connection not initialized".to_string()))?;
-        
-        let kafka_producer = self.kafka_producer.as_ref()
+        let pg_conn = self.postgres_conn.as_mut().ok_or_else(|| {
+            Error::Connection("PostgreSQL connection not initialized".to_string())
+        })?;
+
+        let kafka_producer = self
+            .kafka_producer
+            .as_ref()
             .ok_or_else(|| Error::Connection("Kafka producer not initialized".to_string()))?;
-        
-        let topic_manager = self.topic_manager.as_mut()
+
+        let topic_manager = self
+            .topic_manager
+            .as_mut()
             .ok_or_else(|| Error::Connection("Topic manager not initialized".to_string()))?;
-        
-        let decoder = self.decoder.as_mut()
+
+        let decoder = self
+            .decoder
+            .as_mut()
             .ok_or_else(|| Error::Connection("Decoder not initialized".to_string()))?;
-        
+
         // Load checkpoint if it exists
         let start_lsn = match self.checkpoint_manager.load().await? {
             Some(checkpoint) => {
-                info!("Resuming from checkpoint: LSN={}, messages={}", 
-                      checkpoint.lsn, checkpoint.message_count);
+                info!(
+                    "Resuming from checkpoint: LSN={}, messages={}",
+                    checkpoint.lsn, checkpoint.message_count
+                );
                 self.total_message_count = checkpoint.message_count;
                 Some(checkpoint.lsn)
             }
@@ -182,21 +203,23 @@ impl Replicator {
                 None
             }
         };
-        
+
         // Start replication
         info!("Starting replication");
         pg_conn.start_replication(start_lsn).await?;
-        
+
         // Create serializer and key strategy
         let serializer = JsonSerializer::new(SerializationFormat::Json);
         let key_strategy = KeyStrategy::None; // TODO: Make this configurable
-        
-        let mut shutdown_rx = self.shutdown_receiver.take()
+
+        let mut shutdown_rx = self
+            .shutdown_receiver
+            .take()
             .ok_or_else(|| Error::Connection("Shutdown receiver not initialized".to_string()))?;
-        
+
         let mut message_count = 0;
         let mut last_checkpoint = std::time::Instant::now();
-        
+
         loop {
             tokio::select! {
                 // Check for shutdown signal
@@ -204,7 +227,7 @@ impl Replicator {
                     info!("Received shutdown signal");
                     break;
                 }
-                
+
                 // Receive replication messages with timeout
                 result = tokio::time::timeout(
                     Duration::from_millis(self.config.replication.poll_interval_ms),
@@ -214,12 +237,12 @@ impl Replicator {
                         Ok(Ok(Some(message))) => {
                             // Update current LSN
                             self.current_lsn = Some(message.wal_end);
-                            
+
                             // Send standby status update to keep connection alive
                             if let Err(e) = pg_conn.send_standby_status_update(message.wal_end).await {
                                 warn!("Failed to send standby status update: {}", e);
                             }
-                            
+
                             // Decode the replication message
                             match decoder.decode(&message.data) {
                                 Ok(Some(decoded_msg)) => {
@@ -232,7 +255,7 @@ impl Replicator {
                                         &key_strategy
                                     ).await {
                                         error!("Failed to process message: {}", e);
-                                        
+
                                         // Decide whether to continue or fail based on error type
                                         match &e {
                                             Error::Kafka(_) => {
@@ -249,7 +272,7 @@ impl Replicator {
                                             }
                                         }
                                     }
-                                    
+
                                     message_count += 1;
                                     self.total_message_count += 1;
                                 }
@@ -261,29 +284,29 @@ impl Replicator {
                                     // Continue on decode errors
                                 }
                             }
-                            
+
                             // Periodic checkpoint
                             if last_checkpoint.elapsed() > Duration::from_secs(self.config.replication.checkpoint_interval_secs) {
                                 info!("Processed {} messages since last checkpoint", message_count);
-                                
+
                                 // Save checkpoint
                                 if let Some(lsn) = self.current_lsn {
                                     let checkpoint = Checkpoint::new(
                                         ReplicationMessage::format_lsn(lsn),
                                         self.total_message_count
                                     );
-                                    
+
                                     if let Err(e) = self.checkpoint_manager.save(&checkpoint).await {
                                         error!("Failed to save checkpoint: {}", e);
                                     } else {
-                                        info!("Checkpoint saved: LSN={}, total_messages={}", 
+                                        info!("Checkpoint saved: LSN={}, total_messages={}",
                                               checkpoint.lsn, checkpoint.message_count);
                                     }
                                 }
-                                
+
                                 message_count = 0;
                                 last_checkpoint = std::time::Instant::now();
-                                
+
                                 // Flush Kafka producer
                                 if let Err(e) = kafka_producer.flush(Duration::from_secs(5)).await {
                                     warn!("Failed to flush Kafka producer: {}", e);
@@ -304,33 +327,35 @@ impl Replicator {
                 }
             }
         }
-        
+
         // Graceful shutdown
         info!("Shutting down replicator");
-        
+
         // Flush any pending Kafka messages
         if let Err(e) = kafka_producer.flush(Duration::from_secs(10)).await {
             warn!("Failed to flush Kafka producer during shutdown: {}", e);
         }
-        
+
         // Save final checkpoint
         if let Some(lsn) = self.current_lsn {
             let checkpoint = Checkpoint::new(
                 ReplicationMessage::format_lsn(lsn),
-                self.total_message_count
+                self.total_message_count,
             );
-            
+
             if let Err(e) = self.checkpoint_manager.save(&checkpoint).await {
                 error!("Failed to save final checkpoint: {}", e);
             } else {
-                info!("Final checkpoint saved: LSN={}, total_messages={}", 
-                      checkpoint.lsn, checkpoint.message_count);
+                info!(
+                    "Final checkpoint saved: LSN={}, total_messages={}",
+                    checkpoint.lsn, checkpoint.message_count
+                );
             }
         }
-        
+
         Err(Error::Shutdown)
     }
-    
+
     async fn process_message(
         config: &Config,
         message: DecodedMessage,
@@ -352,10 +377,12 @@ impl Replicator {
                 // Ensure topic exists
                 let topic = config.kafka.topic_name(&event.schema, &event.table);
                 topic_manager.ensure_topic_exists(&topic).await?;
-                
+
                 // Send to Kafka
-                kafka_producer.send_change_event(&event, key_strategy, serializer).await?;
-                
+                kafka_producer
+                    .send_change_event(&event, key_strategy, serializer)
+                    .await?;
+
                 Ok(())
             }
         }

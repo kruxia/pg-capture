@@ -19,12 +19,10 @@ async fn test_throughput() {
         .ok();
 
     let (client, test_config) = setup_performance_test().await;
-    
+
     // Start replicator
     let mut replicator = Replicator::new(test_config.clone());
-    let replicator_handle = tokio::spawn(async move {
-        replicator.run().await
-    });
+    let replicator_handle = tokio::spawn(async move { replicator.run().await });
 
     // Give replicator time to start
     tokio::time::sleep(Duration::from_secs(2)).await;
@@ -38,7 +36,7 @@ async fn test_throughput() {
     let consumer = create_performance_consumer(&test_config.kafka).await;
     let messages_received_clone = messages_received.clone();
     let bytes_received_clone = bytes_received.clone();
-    
+
     let consumer_handle = tokio::spawn(async move {
         loop {
             if let Ok(Ok(message)) = timeout(Duration::from_millis(100), consumer.recv()).await {
@@ -55,7 +53,10 @@ async fn test_throughput() {
     let batch_size = 100;
     let start_time = Instant::now();
 
-    info!("Starting performance test with {} messages", target_messages);
+    info!(
+        "Starting performance test with {} messages",
+        target_messages
+    );
 
     for batch in 0..(target_messages / batch_size) {
         let mut batch_query = String::from("INSERT INTO perf_test (data, value) VALUES ");
@@ -75,7 +76,10 @@ async fn test_throughput() {
     }
 
     let insert_duration = start_time.elapsed();
-    info!("Inserted {} messages in {:?}", target_messages, insert_duration);
+    info!(
+        "Inserted {} messages in {:?}",
+        target_messages, insert_duration
+    );
 
     // Wait for all messages to be consumed
     let wait_start = Instant::now();
@@ -93,15 +97,18 @@ async fn test_throughput() {
     // Calculate metrics
     let insert_rate = target_messages as f64 / insert_duration.as_secs_f64();
     let throughput = received as f64 / total_duration.as_secs_f64();
-    let avg_latency = (total_duration.as_millis() as f64 - insert_duration.as_millis() as f64) 
-                      / received as f64;
+    let avg_latency =
+        (total_duration.as_millis() as f64 - insert_duration.as_millis() as f64) / received as f64;
     let avg_message_size = if received > 0 { bytes / received } else { 0 };
 
     // Print results
     println!("\n=== Performance Test Results ===");
     println!("Messages sent: {}", target_messages);
     println!("Messages received: {}", received);
-    println!("Success rate: {:.2}%", (received as f64 / target_messages as f64) * 100.0);
+    println!(
+        "Success rate: {:.2}%",
+        (received as f64 / target_messages as f64) * 100.0
+    );
     println!("Insert rate: {:.2} msg/sec", insert_rate);
     println!("End-to-end throughput: {:.2} msg/sec", throughput);
     println!("Average latency: {:.2} ms", avg_latency);
@@ -110,9 +117,20 @@ async fn test_throughput() {
     println!("Total duration: {:?}", total_duration);
 
     // Verify performance meets requirements (1000 msg/sec, <500ms latency)
-    assert!(throughput >= 1000.0, "Throughput {} is below 1000 msg/sec", throughput);
-    assert!(avg_latency < 500.0, "Average latency {}ms exceeds 500ms", avg_latency);
-    assert_eq!(received, target_messages as u64, "Not all messages were received");
+    assert!(
+        throughput >= 1000.0,
+        "Throughput {} is below 1000 msg/sec",
+        throughput
+    );
+    assert!(
+        avg_latency < 500.0,
+        "Average latency {}ms exceeds 500ms",
+        avg_latency
+    );
+    assert_eq!(
+        received, target_messages as u64,
+        "Not all messages were received"
+    );
 
     // Cleanup
     consumer_handle.abort();
@@ -129,16 +147,14 @@ async fn test_memory_usage() {
         .ok();
 
     let (client, test_config) = setup_performance_test().await;
-    
+
     // Get initial memory usage
     let initial_memory = get_current_memory_usage();
     info!("Initial memory usage: {} MB", initial_memory / 1024 / 1024);
 
     // Start replicator
     let mut replicator = Replicator::new(test_config.clone());
-    let replicator_handle = tokio::spawn(async move {
-        replicator.run().await
-    });
+    let replicator_handle = tokio::spawn(async move { replicator.run().await });
 
     // Give replicator time to start
     tokio::time::sleep(Duration::from_secs(2)).await;
@@ -173,11 +189,11 @@ async fn test_memory_usage() {
                 .collect::<Vec<_>>()
                 .join(", ")
         );
-        
+
         if client.execute(&batch_query, &[]).await.is_ok() {
             total_messages += 50;
         }
-        
+
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
 
@@ -232,8 +248,11 @@ async fn setup_performance_test() -> (Client, Config) {
     let (client, connection) = tokio_postgres::connect(
         &format!(
             "host={} port={} dbname={} user={} password={}",
-            db_config.host, db_config.port, db_config.database, 
-            db_config.username, db_config.password
+            db_config.host,
+            db_config.port,
+            db_config.database,
+            db_config.username,
+            db_config.password
         ),
         NoTls,
     )
@@ -247,30 +266,46 @@ async fn setup_performance_test() -> (Client, Config) {
     });
 
     // Clean up any existing test objects
-    client.execute(&format!("DROP PUBLICATION IF EXISTS {}", db_config.publication), &[])
-        .await.ok();
+    client
+        .execute(
+            &format!("DROP PUBLICATION IF EXISTS {}", db_config.publication),
+            &[],
+        )
+        .await
+        .ok();
     client.execute(&format!("SELECT pg_drop_replication_slot('{}') WHERE EXISTS (SELECT 1 FROM pg_replication_slots WHERE slot_name = '{}')", 
                            db_config.slot_name, db_config.slot_name), &[])
         .await.ok();
-    client.execute("DROP TABLE IF EXISTS perf_test", &[])
-        .await.ok();
+    client
+        .execute("DROP TABLE IF EXISTS perf_test", &[])
+        .await
+        .ok();
 
     // Create test table
-    client.execute(
-        "CREATE TABLE perf_test (
+    client
+        .execute(
+            "CREATE TABLE perf_test (
             id SERIAL PRIMARY KEY,
             data TEXT,
             value INTEGER,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )",
-        &[]
-    ).await.unwrap();
+            &[],
+        )
+        .await
+        .unwrap();
 
     // Create publication
-    client.execute(
-        &format!("CREATE PUBLICATION {} FOR TABLE perf_test", db_config.publication),
-        &[]
-    ).await.unwrap();
+    client
+        .execute(
+            &format!(
+                "CREATE PUBLICATION {} FOR TABLE perf_test",
+                db_config.publication
+            ),
+            &[],
+        )
+        .await
+        .unwrap();
 
     let kafka_config = KafkaConfig {
         brokers: vec!["localhost:9092".to_string()],
@@ -301,9 +336,15 @@ async fn setup_performance_test() -> (Client, Config) {
 
 async fn cleanup_performance_test(client: &Client) {
     let slot_name = format!("perf_slot_{}", std::process::id());
-    
-    client.execute("DROP TABLE IF EXISTS perf_test CASCADE", &[]).await.ok();
-    client.execute("DROP PUBLICATION IF EXISTS perf_publication", &[]).await.ok();
+
+    client
+        .execute("DROP TABLE IF EXISTS perf_test CASCADE", &[])
+        .await
+        .ok();
+    client
+        .execute("DROP PUBLICATION IF EXISTS perf_publication", &[])
+        .await
+        .ok();
     client.execute(&format!("SELECT pg_drop_replication_slot('{}') WHERE EXISTS (SELECT 1 FROM pg_replication_slots WHERE slot_name = '{}')", 
                            slot_name, slot_name), &[])
         .await.ok();
@@ -344,7 +385,7 @@ fn get_current_memory_usage() -> usize {
             }
         }
     }
-    
+
     // Fallback: estimate based on allocator statistics
     0
 }

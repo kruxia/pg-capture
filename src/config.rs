@@ -37,13 +37,16 @@ impl Default for SslMode {
 
 impl std::str::FromStr for SslMode {
     type Err = String;
-    
+
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "disable" => Ok(SslMode::Disable),
             "prefer" => Ok(SslMode::Prefer),
             "require" => Ok(SslMode::Require),
-            _ => Err(format!("Invalid SSL mode: {}. Valid values: disable, prefer, require", s)),
+            _ => Err(format!(
+                "Invalid SSL mode: {}. Valid values: disable, prefer, require",
+                s
+            )),
         }
     }
 }
@@ -73,22 +76,17 @@ impl Config {
     pub fn from_env() -> Result<Self, String> {
         // PostgreSQL config
         let postgres = PostgresConfig {
-            host: env::var("PG_HOST")
-                .unwrap_or_else(|_| "localhost".to_string()),
+            host: env::var("PG_HOST").unwrap_or_else(|_| "localhost".to_string()),
             port: env::var("PG_PORT")
                 .unwrap_or_else(|_| "5432".to_string())
                 .parse::<u16>()
                 .map_err(|_| "PG_PORT must be a valid port number")?,
-            database: env::var("PG_DATABASE")
-                .map_err(|_| "PG_DATABASE is required")?,
-            username: env::var("PG_USERNAME")
-                .map_err(|_| "PG_USERNAME is required")?,
-            password: env::var("PG_PASSWORD")
-                .map_err(|_| "PG_PASSWORD is required")?,
+            database: env::var("PG_DATABASE").map_err(|_| "PG_DATABASE is required")?,
+            username: env::var("PG_USERNAME").map_err(|_| "PG_USERNAME is required")?,
+            password: env::var("PG_PASSWORD").map_err(|_| "PG_PASSWORD is required")?,
             publication: env::var("PG_PUBLICATION")
                 .unwrap_or_else(|_| "pg_capture_pub".to_string()),
-            slot_name: env::var("PG_SLOT_NAME")
-                .unwrap_or_else(|_| "pg_capture_slot".to_string()),
+            slot_name: env::var("PG_SLOT_NAME").unwrap_or_else(|_| "pg_capture_slot".to_string()),
             connect_timeout_secs: env::var("PG_CONNECT_TIMEOUT_SECS")
                 .unwrap_or_else(|_| "30".to_string())
                 .parse::<u64>()
@@ -106,19 +104,16 @@ impl Config {
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty())
             .collect::<Vec<_>>();
-        
+
         if brokers.is_empty() {
             return Err("KAFKA_BROKERS must contain at least one broker".to_string());
         }
 
         let kafka = KafkaConfig {
             brokers,
-            topic_prefix: env::var("KAFKA_TOPIC_PREFIX")
-                .unwrap_or_else(|_| "cdc".to_string()),
-            compression: env::var("KAFKA_COMPRESSION")
-                .unwrap_or_else(|_| "snappy".to_string()),
-            acks: env::var("KAFKA_ACKS")
-                .unwrap_or_else(|_| "all".to_string()),
+            topic_prefix: env::var("KAFKA_TOPIC_PREFIX").unwrap_or_else(|_| "cdc".to_string()),
+            compression: env::var("KAFKA_COMPRESSION").unwrap_or_else(|_| "snappy".to_string()),
+            acks: env::var("KAFKA_ACKS").unwrap_or_else(|_| "all".to_string()),
             linger_ms: env::var("KAFKA_LINGER_MS")
                 .unwrap_or_else(|_| "100".to_string())
                 .parse::<u32>()
@@ -162,7 +157,7 @@ impl Config {
             replication,
         })
     }
-    
+
     pub fn postgres_url(&self) -> String {
         format!(
             "postgres://{}:{}@{}:{}/{}?replication=database",
@@ -173,7 +168,7 @@ impl Config {
             self.postgres.database
         )
     }
-    
+
     pub fn kafka_topic_name(&self, table_name: &str) -> String {
         format!("{}.{}", self.kafka.topic_prefix, table_name)
     }
