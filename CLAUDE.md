@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-pg-capture is a PostgreSQL logical replicator that publishes changes to Kafka topics. It's based on Supabase's pg_replicate (now called "etl") project. This is a Rust project currently in initial setup phase.
+pg-capture is a PostgreSQL logical replicator that publishes changes to Kafka topics. It's inspired by Supabase's pg_replicate (now called "etl") project. This is a Rust project currently in initial setup phase.
 
 ## Development Commands
 
@@ -93,18 +93,29 @@ Key concepts for implementing the PostgreSQL source:
 Following the 12-factor app methodology, all configuration should be stored in environment variables:
 
 ### Required Environment Variables:
-- `PG_REPLICATE_DATABASE_URL`: PostgreSQL connection string (e.g., `postgres://user:pass@host:5432/dbname`)
-- `PG_REPLICATE_SLOT_NAME`: Replication slot name
-- `PG_REPLICATE_PUBLICATION_NAME`: Publication name for logical replication
+- `PG_DATABASE`: PostgreSQL database name
+- `PG_USERNAME`: PostgreSQL username
+- `PG_PASSWORD`: PostgreSQL password
 - `KAFKA_BROKERS`: Comma-separated list of Kafka brokers (e.g., `localhost:9092,localhost:9093`)
-- `KAFKA_TOPIC_PREFIX`: Prefix for Kafka topics (e.g., `cdc.`)
 
 ### Optional Environment Variables:
-- `KAFKA_COMPRESSION_TYPE`: Compression type (none, gzip, snappy, lz4, zstd) - default: none
-- `KAFKA_MESSAGE_TIMEOUT_MS`: Message send timeout in milliseconds - default: 30000
-- `KAFKA_BATCH_SIZE`: Batch size for Kafka producer - default: 1000
-- `LOG_LEVEL`: Logging level (error, warn, info, debug, trace) - default: info
-- `LOG_FORMAT`: Log format (plain, json) - default: plain
+- `PG_HOST`: PostgreSQL host - default: localhost
+- `PG_PORT`: PostgreSQL port - default: 5432
+- `PG_PUBLICATION`: Publication name - default: pg_capture_pub
+- `PG_SLOT_NAME`: Replication slot name - default: pg_capture_slot
+- `PG_CONNECT_TIMEOUT_SECS`: Connection timeout in seconds - default: 30
+- `PG_SSL_MODE`: SSL mode (disable, prefer, require) - default: disable
+- `KAFKA_TOPIC_PREFIX`: Topic prefix - default: cdc
+- `KAFKA_COMPRESSION`: Compression type (none, gzip, snappy, lz4, zstd) - default: snappy
+- `KAFKA_ACKS`: Producer acknowledgment level (0, 1, all) - default: all
+- `KAFKA_LINGER_MS`: Time to wait before sending batch - default: 100
+- `KAFKA_BATCH_SIZE`: Batch size for Kafka producer - default: 16384
+- `KAFKA_BUFFER_MEMORY`: Total memory for producer buffer - default: 33554432 (32MB)
+- `REPLICATION_POLL_INTERVAL_MS`: Polling interval in milliseconds - default: 100
+- `REPLICATION_KEEPALIVE_INTERVAL_SECS`: Keepalive interval in seconds - default: 10
+- `REPLICATION_CHECKPOINT_INTERVAL_SECS`: Checkpoint interval in seconds - default: 10
+- `REPLICATION_CHECKPOINT_FILE`: Path to checkpoint file - optional
+- `REPLICATION_MAX_BUFFER_SIZE`: Maximum buffer size - default: 1000
 
 Use the `envy` crate to parse environment variables into strongly-typed configuration structs.
 

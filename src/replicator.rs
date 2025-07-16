@@ -8,6 +8,27 @@ use tokio::signal;
 use tokio::sync::mpsc;
 use tracing::{error, info, instrument, warn};
 
+/// The main replication orchestrator that manages the PostgreSQL to Kafka CDC pipeline.
+///
+/// `Replicator` coordinates all aspects of the replication process:
+/// - Establishes and maintains connections to PostgreSQL and Kafka
+/// - Decodes logical replication messages from PostgreSQL
+/// - Publishes change events to appropriate Kafka topics
+/// - Manages checkpoints for exactly-once delivery
+/// - Handles failures with automatic retry logic
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use pg_capture::{Config, Replicator, Result};
+///
+/// #[tokio::main]
+/// async fn main() -> Result<()> {
+///     let config = Config::from_env()?;
+///     let mut replicator = Replicator::new(config);
+///     replicator.run().await
+/// }
+/// ```
 pub struct Replicator {
     config: Config,
     postgres_conn: Option<ReplicationConnection>,
@@ -21,6 +42,20 @@ pub struct Replicator {
 }
 
 impl Replicator {
+    /// Creates a new replicator with the given configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - Configuration loaded from environment or constructed programmatically
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use pg_capture::{Config, Replicator};
+    ///
+    /// let config = Config::from_env().expect("Failed to load config");
+    /// let replicator = Replicator::new(config);
+    /// ```
     pub fn new(config: Config) -> Self {
         // Use checkpoint path from config, or default to checkpoint.json
         let checkpoint_path = config
@@ -42,6 +77,48 @@ impl Replicator {
         }
     }
 
+    /// Runs the replication process until completion or shutdown.
+    ///
+    /// This method:
+    /// 1. Sets up signal handling for graceful shutdown (Ctrl+C)
+    /// 2. Establishes connections to PostgreSQL and Kafka
+    /// 3. Starts the replication stream from the last checkpoint (if any)
+    /// 4. Continuously reads changes and publishes them to Kafka
+    /// 5. Periodically saves checkpoints for resumability
+    /// 6. Automatically retries on transient failures
+    ///
+    /// The method will run indefinitely until:
+    /// - A shutdown signal is received (Ctrl+C)
+    /// - An unrecoverable error occurs after max retries
+    /// - The replication slot is dropped
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if:
+    /// - Configuration is invalid
+    /// - Cannot connect to PostgreSQL or Kafka after retries
+    /// - Cannot create or access the replication slot
+    /// - Checkpoint file cannot be written
+    ///
+    /// Returns `Ok(())` on graceful shutdown.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// use pg_capture::{Config, Replicator, Error};
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let config = Config::from_env().expect("Failed to load config");
+    ///     let mut replicator = Replicator::new(config);
+    ///     
+    ///     match replicator.run().await {
+    ///         Ok(()) => println!("Replication completed successfully"),
+    ///         Err(Error::Shutdown) => println!("Graceful shutdown"),
+    ///         Err(e) => eprintln!("Replication failed: {}", e),
+    ///     }
+    /// }
+    /// ```
     #[instrument(skip(self))]
     pub async fn run(&mut self) -> Result<()> {
         info!("Replicator starting");

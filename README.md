@@ -1,6 +1,6 @@
 # pg-capture
 
-A high-performance PostgreSQL logical replication tool that streams database changes to Apache Kafka topics in real-time. Based on Supabase's pg_replicate project.
+A high-performance PostgreSQL logical replication tool that streams database changes to Apache Kafka topics in real-time. Inspired by Supabase's pg_replicate project.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Rust](https://img.shields.io/badge/rust-1.75%2B-orange.svg)](https://www.rust-lang.org)
@@ -373,6 +373,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Acknowledgments
 
-- Based on [Supabase's pg_replicate](https://github.com/supabase/etl)
+- Inspired by [Supabase's pg_replicate](https://github.com/supabase/etl)
 - Built with [tokio-postgres](https://github.com/sfackler/rust-postgres)
 - Powered by [rdkafka](https://github.com/fede1024/rust-rdkafka)

@@ -10,12 +10,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .init();
 
     // Configuration - these would come from environment variables in production
-    let connection_string = std::env::var("PG_REPLICATE_DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://postgres:postgres@localhost:5432/postgres".to_string());
+    let host = std::env::var("PG_HOST").unwrap_or_else(|_| "localhost".to_string());
+    let port = std::env::var("PG_PORT").unwrap_or_else(|_| "5432".to_string());
+    let database = std::env::var("PG_DATABASE").unwrap_or_else(|_| "postgres".to_string());
+    let username = std::env::var("PG_USERNAME").unwrap_or_else(|_| "postgres".to_string());
+    let password = std::env::var("PG_PASSWORD").unwrap_or_else(|_| "postgres".to_string());
+    
+    let connection_string = format!(
+        "postgres://{}:{}@{}:{}/{}?replication=database",
+        username, password, host, port, database
+    );
+    
     let slot_name =
-        std::env::var("PG_REPLICATE_SLOT_NAME").unwrap_or_else(|_| "test_slot".to_string());
+        std::env::var("PG_SLOT_NAME").unwrap_or_else(|_| "test_slot".to_string());
     let publication_name =
-        std::env::var("PG_REPLICATE_PUBLICATION_NAME").unwrap_or_else(|_| "test_pub".to_string());
+        std::env::var("PG_PUBLICATION").unwrap_or_else(|_| "test_pub".to_string());
 
     info!("Testing PostgreSQL Copy Both protocol implementation");
     info!("Connection string: {}", connection_string);
