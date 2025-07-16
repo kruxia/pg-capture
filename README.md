@@ -106,8 +106,8 @@ KAFKA_BROKERS            # Comma-separated list of Kafka brokers
 # PostgreSQL
 PG_HOST                  # default: localhost
 PG_PORT                  # default: 5432
-PG_PUBLICATION           # default: pg_replicate_kafka_pub
-PG_SLOT_NAME             # default: pg_replicate_kafka_slot
+PG_PUBLICATION           # default: pg_capture_pub
+PG_SLOT_NAME             # default: pg_capture_slot
 PG_CONNECT_TIMEOUT_SECS  # default: 30
 PG_SSL_MODE              # default: disable (options: disable, prefer, require)
 
@@ -258,7 +258,7 @@ pg-capture uses structured logging with configurable levels:
 
 ```bash
 # Set log level via environment variable
-export RUST_LOG=pg_replicate_kafka=debug
+export RUST_LOG=pg_capture=debug
 
 # Or in config.toml
 [logging]
@@ -284,7 +284,7 @@ Future versions will expose Prometheus metrics on port 9090.
 
 1. **"replication slot already exists"**
    ```sql
-   SELECT pg_drop_replication_slot('pg_replicate_kafka_slot');
+   SELECT pg_drop_replication_slot('pg_capture_slot');
    ```
 
 2. **"publication does not exist"**
@@ -307,7 +307,7 @@ Future versions will expose Prometheus metrics on port 9090.
 Enable debug logging to see detailed information:
 
 ```bash
-RUST_LOG=pg_replicate_kafka=debug,rdkafka=debug pg-capture
+RUST_LOG=pg_capture=debug,rdkafka=debug pg-capture
 ```
 
 ## Performance Tuning

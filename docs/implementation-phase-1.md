@@ -188,7 +188,7 @@ database = "mydb"
 username = "replicator"
 password = "secret"
 publication = "my_publication"
-slot_name = "pg_replicate_kafka_slot"
+slot_name = "pg_capture_slot"
 
 [kafka]
 brokers = ["localhost:9092"]

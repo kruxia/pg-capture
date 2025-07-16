@@ -10,8 +10,8 @@ export PG_PASSWORD="secret"
 # PostgreSQL Configuration (Optional - defaults shown)
 export PG_HOST="localhost"
 export PG_PORT="5432"
-export PG_PUBLICATION="pg_replicate_kafka_pub"
-export PG_SLOT_NAME="pg_replicate_kafka_slot"
+export PG_PUBLICATION="pg_capture_pub"
+export PG_SLOT_NAME="pg_capture_slot"
 export PG_CONNECT_TIMEOUT_SECS="30"
 export PG_SSL_MODE="disable"  # Options: disable, prefer, require
 
@@ -34,7 +34,7 @@ export REPLICATION_CHECKPOINT_FILE="./checkpoint.json"  # Optional - no checkpoi
 export REPLICATION_MAX_BUFFER_SIZE="1000"
 
 # Logging Configuration
-export RUST_LOG="pg_replicate_kafka=info"  # Options: error, warn, info, debug, trace
+export RUST_LOG="pg_capture=info"  # Options: error, warn, info, debug, trace
 
 # Development helpers
 export RUST_BACKTRACE="1"  # Show stack traces on panic

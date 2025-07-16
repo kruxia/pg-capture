@@ -129,7 +129,7 @@ jobs:
       
       - name: Run integration tests
         run: |
-          export RUST_LOG=pg_replicate_kafka=debug
+          export RUST_LOG=pg_capture=debug
           cargo test --test integration_test -- --ignored --test-threads=1
           cargo test --test checkpoint_test
 

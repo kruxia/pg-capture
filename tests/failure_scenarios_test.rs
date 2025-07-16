@@ -1,5 +1,5 @@
-use pg_replicate_kafka::config::{Config, KafkaConfig, PostgresConfig, ReplicationConfig, SslMode};
-use pg_replicate_kafka::replicator::Replicator;
+use pg_capture::config::{Config, KafkaConfig, PostgresConfig, ReplicationConfig, SslMode};
+use pg_capture::replicator::Replicator;
 use rdkafka::config::ClientConfig;
 use rdkafka::consumer::{Consumer, StreamConsumer};
 use rdkafka::Message;
@@ -17,7 +17,7 @@ use tracing::info;
 #[ignore] // Run with: cargo test --ignored failure_scenarios_test::test_postgres_connection_failure
 async fn test_postgres_connection_failure() {
     tracing_subscriber::fmt()
-        .with_env_filter("pg_replicate_kafka=debug")
+        .with_env_filter("pg_capture=debug")
         .try_init()
         .ok();
 
@@ -80,7 +80,7 @@ async fn test_postgres_connection_failure() {
 #[ignore] // Run with: cargo test --ignored failure_scenarios_test::test_kafka_connection_failure
 async fn test_kafka_connection_failure() {
     tracing_subscriber::fmt()
-        .with_env_filter("pg_replicate_kafka=debug")
+        .with_env_filter("pg_capture=debug")
         .try_init()
         .ok();
 
@@ -168,14 +168,14 @@ async fn test_kafka_connection_failure() {
 #[ignore] // Run with: cargo test --ignored failure_scenarios_test::test_replicator_crash_recovery
 async fn test_replicator_crash_recovery() {
     tracing_subscriber::fmt()
-        .with_env_filter("pg_replicate_kafka=debug")
+        .with_env_filter("pg_capture=debug")
         .try_init()
         .ok();
 
     let (client, mut test_config) = setup_failure_test().await;
     
     // Use a specific checkpoint file
-    let checkpoint_file = format!("/tmp/pg_replicate_kafka_crash_test_{}.checkpoint", 
+    let checkpoint_file = format!("/tmp/pg_capture_crash_test_{}.checkpoint", 
                                    std::process::id());
     test_config.replication.checkpoint_file = Some(PathBuf::from(checkpoint_file.clone()));
     test_config.replication.checkpoint_interval_secs = 1; // Frequent checkpoints
@@ -256,7 +256,7 @@ async fn test_replicator_crash_recovery() {
 #[ignore] // Run with: cargo test --ignored failure_scenarios_test::test_malformed_replication_data
 async fn test_malformed_replication_data() {
     tracing_subscriber::fmt()
-        .with_env_filter("pg_replicate_kafka=debug")
+        .with_env_filter("pg_capture=debug")
         .try_init()
         .ok();
 

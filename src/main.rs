@@ -1,5 +1,5 @@
 use clap::Parser;
-use pg_replicate_kafka::{Config, Result, Replicator};
+use pg_capture::{Config, Result, Replicator};
 use tracing::{error, info};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
 
@@ -70,10 +70,10 @@ async fn main() -> Result<()> {
 
 fn init_logging(json: bool, verbose: bool) {
     let env_filter = if verbose {
-        EnvFilter::new("pg_replicate_kafka=debug,info")
+        EnvFilter::new("pg_capture=debug,info")
     } else {
         EnvFilter::try_from_default_env()
-            .unwrap_or_else(|_| EnvFilter::new("pg_replicate_kafka=info,warn"))
+            .unwrap_or_else(|_| EnvFilter::new("pg_capture=info,warn"))
     };
     
     let fmt_layer = if json {

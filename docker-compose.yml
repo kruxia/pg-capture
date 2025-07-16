@@ -67,7 +67,7 @@ services:
       PG_USERNAME: postgres
       PG_PASSWORD: postgres
       PG_PUBLICATION: my_publication
-      PG_SLOT_NAME: pg_replicate_kafka_slot
+      PG_SLOT_NAME: pg_capture_slot
       
       # Kafka configuration
       KAFKA_BROKERS: kafka:9092
@@ -82,7 +82,7 @@ services:
       REPLICATION_CHECKPOINT_FILE: /var/lib/pg-capture/checkpoint.json
       
       # Logging
-      RUST_LOG: pg_replicate_kafka=info
+      RUST_LOG: pg_capture=info
     restart: unless-stopped
     profiles:
       - app

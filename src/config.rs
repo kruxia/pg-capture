@@ -86,9 +86,9 @@ impl Config {
             password: env::var("PG_PASSWORD")
                 .map_err(|_| "PG_PASSWORD is required")?,
             publication: env::var("PG_PUBLICATION")
-                .unwrap_or_else(|_| "pg_replicate_kafka_pub".to_string()),
+                .unwrap_or_else(|_| "pg_capture_pub".to_string()),
             slot_name: env::var("PG_SLOT_NAME")
-                .unwrap_or_else(|_| "pg_replicate_kafka_slot".to_string()),
+                .unwrap_or_else(|_| "pg_capture_slot".to_string()),
             connect_timeout_secs: env::var("PG_CONNECT_TIMEOUT_SECS")
                 .unwrap_or_else(|_| "30".to_string())
                 .parse::<u64>()

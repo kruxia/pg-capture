@@ -72,7 +72,7 @@ services:
       TEST_KAFKA_BROKERS: kafka-test:9092
       
       # Test configuration
-      RUST_LOG: pg_replicate_kafka=debug,rdkafka=info
+      RUST_LOG: pg_capture=debug,rdkafka=info
       RUST_BACKTRACE: 1
       
       # Override default test timeouts
@@ -110,7 +110,7 @@ services:
       TEST_PG_USERNAME: postgres
       TEST_PG_PASSWORD: postgres
       TEST_KAFKA_BROKERS: kafka-test:9092
-      RUST_LOG: pg_replicate_kafka=info
+      RUST_LOG: pg_capture=info
     volumes:
       - ./target:/app/target
       - cargo-cache:/usr/local/cargo/registry

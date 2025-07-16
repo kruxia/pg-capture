@@ -1,5 +1,5 @@
-use pg_replicate_kafka::config::{Config, KafkaConfig, PostgresConfig, ReplicationConfig, SslMode};
-use pg_replicate_kafka::replicator::Replicator;
+use pg_capture::config::{Config, KafkaConfig, PostgresConfig, ReplicationConfig, SslMode};
+use pg_capture::replicator::Replicator;
 use rdkafka::config::ClientConfig;
 use rdkafka::consumer::{Consumer, StreamConsumer};
 use rdkafka::Message;
@@ -15,7 +15,7 @@ use tracing::info;
 #[ignore] // Run with: cargo test --ignored integration_test::test_end_to_end_replication
 async fn test_end_to_end_replication() {
     tracing_subscriber::fmt()
-        .with_env_filter("pg_replicate_kafka=debug,rdkafka=info")
+        .with_env_filter("pg_capture=debug,rdkafka=info")
         .try_init()
         .ok();
 
@@ -108,7 +108,7 @@ async fn test_end_to_end_replication() {
 #[ignore] // Run with: cargo test --ignored integration_test::test_replicator_recovery
 async fn test_replicator_recovery() {
     tracing_subscriber::fmt()
-        .with_env_filter("pg_replicate_kafka=debug")
+        .with_env_filter("pg_capture=debug")
         .try_init()
         .ok();
 
@@ -176,14 +176,14 @@ async fn test_replicator_recovery() {
 #[ignore] // Run with: cargo test --ignored integration_test::test_checkpoint_persistence
 async fn test_checkpoint_persistence() {
     tracing_subscriber::fmt()
-        .with_env_filter("pg_replicate_kafka=debug")
+        .with_env_filter("pg_capture=debug")
         .try_init()
         .ok();
 
     let (client, mut test_config) = setup_test_database().await;
     
     // Use a specific checkpoint file for this test
-    let checkpoint_file = format!("/tmp/pg_replicate_kafka_test_{}.checkpoint", 
+    let checkpoint_file = format!("/tmp/pg_capture_test_{}.checkpoint", 
                                    std::process::id());
     test_config.replication.checkpoint_file = Some(PathBuf::from(checkpoint_file.clone()));
 

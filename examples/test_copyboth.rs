@@ -1,4 +1,4 @@
-use pg_replicate_kafka::postgres::connection::ReplicationConnection;
+use pg_capture::postgres::connection::ReplicationConnection;
 use tracing::info;
 use tracing_subscriber;
 
@@ -6,7 +6,7 @@ use tracing_subscriber;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize logging
     tracing_subscriber::fmt()
-        .with_env_filter("pg_replicate_kafka=debug,info")
+        .with_env_filter("pg_capture=debug,info")
         .init();
 
     // Configuration - these would come from environment variables in production

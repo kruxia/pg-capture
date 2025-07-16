@@ -1,5 +1,5 @@
-use pg_replicate_kafka::config::{Config, KafkaConfig, PostgresConfig, ReplicationConfig, SslMode};
-use pg_replicate_kafka::replicator::Replicator;
+use pg_capture::config::{Config, KafkaConfig, PostgresConfig, ReplicationConfig, SslMode};
+use pg_capture::replicator::Replicator;
 use rdkafka::config::ClientConfig;
 use rdkafka::consumer::{Consumer, StreamConsumer};
 use rdkafka::Message;
@@ -15,7 +15,7 @@ use tracing::info;
 #[ignore] // Run with: cargo test --ignored exactly_once_test::test_no_duplicate_messages
 async fn test_no_duplicate_messages() {
     tracing_subscriber::fmt()
-        .with_env_filter("pg_replicate_kafka=debug")
+        .with_env_filter("pg_capture=debug")
         .try_init()
         .ok();
 
@@ -24,7 +24,7 @@ async fn test_no_duplicate_messages() {
     // Configure for exactly-once semantics
     test_config.kafka.acks = "all".to_string();
     test_config.replication.checkpoint_interval_secs = 1;
-    let checkpoint_file = format!("/tmp/pg_replicate_kafka_eo_test_{}.checkpoint", 
+    let checkpoint_file = format!("/tmp/pg_capture_eo_test_{}.checkpoint", 
                                    std::process::id());
     test_config.replication.checkpoint_file = Some(PathBuf::from(checkpoint_file.clone()));
 
@@ -117,14 +117,14 @@ async fn test_no_duplicate_messages() {
 #[ignore] // Run with: cargo test --ignored exactly_once_test::test_checkpoint_consistency
 async fn test_checkpoint_consistency() {
     tracing_subscriber::fmt()
-        .with_env_filter("pg_replicate_kafka=debug")
+        .with_env_filter("pg_capture=debug")
         .try_init()
         .ok();
 
     let (client, mut test_config) = setup_exactly_once_test().await;
     
     // Configure with checkpoint
-    let checkpoint_file = format!("/tmp/pg_replicate_kafka_consistency_test_{}.checkpoint", 
+    let checkpoint_file = format!("/tmp/pg_capture_consistency_test_{}.checkpoint", 
                                    std::process::id());
     test_config.replication.checkpoint_file = Some(PathBuf::from(checkpoint_file.clone()));
     test_config.replication.checkpoint_interval_secs = 1;
@@ -226,7 +226,7 @@ async fn test_checkpoint_consistency() {
 #[ignore] // Run with: cargo test --ignored exactly_once_test::test_transaction_boundaries
 async fn test_transaction_boundaries() {
     tracing_subscriber::fmt()
-        .with_env_filter("pg_replicate_kafka=debug")
+        .with_env_filter("pg_capture=debug")
         .try_init()
         .ok();
 

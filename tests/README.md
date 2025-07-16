@@ -110,7 +110,7 @@ Based on the performance tests, pg-capture should achieve:
 
 Enable detailed logging:
 ```bash
-RUST_LOG=pg_replicate_kafka=debug cargo test --test integration_test -- --ignored --nocapture
+RUST_LOG=pg_capture=debug cargo test --test integration_test -- --ignored --nocapture
 ```
 
 ## Writing New Tests

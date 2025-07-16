@@ -1,4 +1,4 @@
-use pg_replicate_kafka::config::{Config, KafkaConfig, PostgresConfig, ReplicationConfig, SslMode};
+use pg_capture::config::{Config, KafkaConfig, PostgresConfig, ReplicationConfig, SslMode};
 use std::env;
 
 /// Get test configuration from environment variables

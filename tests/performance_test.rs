@@ -1,5 +1,5 @@
-use pg_replicate_kafka::config::{Config, KafkaConfig, PostgresConfig, ReplicationConfig, SslMode};
-use pg_replicate_kafka::replicator::Replicator;
+use pg_capture::config::{Config, KafkaConfig, PostgresConfig, ReplicationConfig, SslMode};
+use pg_capture::replicator::Replicator;
 use rdkafka::config::ClientConfig;
 use rdkafka::consumer::{Consumer, StreamConsumer};
 use rdkafka::Message;
@@ -14,7 +14,7 @@ use tracing::info;
 #[ignore] // Run with: cargo test --ignored performance_test::test_throughput
 async fn test_throughput() {
     tracing_subscriber::fmt()
-        .with_env_filter("pg_replicate_kafka=info")
+        .with_env_filter("pg_capture=info")
         .try_init()
         .ok();
 
@@ -124,7 +124,7 @@ async fn test_throughput() {
 #[ignore] // Run with: cargo test --ignored performance_test::test_memory_usage
 async fn test_memory_usage() {
     tracing_subscriber::fmt()
-        .with_env_filter("pg_replicate_kafka=info")
+        .with_env_filter("pg_capture=info")
         .try_init()
         .ok();
 

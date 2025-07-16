@@ -1,4 +1,4 @@
-use pg_replicate_kafka::checkpoint::{Checkpoint, CheckpointManager};
+use pg_capture::checkpoint::{Checkpoint, CheckpointManager};
 use tempfile::TempDir;
 use std::time::Duration;
 

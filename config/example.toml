@@ -5,7 +5,7 @@ database = "mydb"
 username = "replicator"
 password = "secret"
 publication = "my_publication"
-slot_name = "pg_replicate_kafka_slot"
+slot_name = "pg_capture_slot"
 connect_timeout_secs = 30
 ssl_mode = "prefer"
 
