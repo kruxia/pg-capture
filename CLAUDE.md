@@ -60,13 +60,13 @@ src/
 - `tokio-postgres` or `postgres`: PostgreSQL client
 - `serde` & `serde_json`: Serialization for CDC events
 - `tracing`: Structured logging and internal observability metrics (required)
-- `config`: Configuration management
+- `envy`: Environment variable parsing with serde
 
 ## Implementation Guidelines
 
 1. **Async First**: Use tokio for all I/O operations
 2. **Error Handling**: Use `thiserror` for custom error types, propagate errors with `?`
-3. **Configuration**: Support both environment variables and config files
+3. **Configuration**: Use environment variables exclusively (12-factor approach)
 4. **Testing**: Write integration tests for PostgreSQL → Kafka pipeline
 5. **Performance**: Use buffering and batching for Kafka writes
 
@@ -88,6 +88,26 @@ Key concepts for implementing the PostgreSQL source:
 - Schema registry integration (if using Avro/Protobuf)
 - Configure rdkafka producer with appropriate settings for CDC workloads
 
+## Configuration Management
+
+Following the 12-factor app methodology, all configuration should be stored in environment variables:
+
+### Required Environment Variables:
+- `PG_REPLICATE_DATABASE_URL`: PostgreSQL connection string (e.g., `postgres://user:pass@host:5432/dbname`)
+- `PG_REPLICATE_SLOT_NAME`: Replication slot name
+- `PG_REPLICATE_PUBLICATION_NAME`: Publication name for logical replication
+- `KAFKA_BROKERS`: Comma-separated list of Kafka brokers (e.g., `localhost:9092,localhost:9093`)
+- `KAFKA_TOPIC_PREFIX`: Prefix for Kafka topics (e.g., `cdc.`)
+
+### Optional Environment Variables:
+- `KAFKA_COMPRESSION_TYPE`: Compression type (none, gzip, snappy, lz4, zstd) - default: none
+- `KAFKA_MESSAGE_TIMEOUT_MS`: Message send timeout in milliseconds - default: 30000
+- `KAFKA_BATCH_SIZE`: Batch size for Kafka producer - default: 1000
+- `LOG_LEVEL`: Logging level (error, warn, info, debug, trace) - default: info
+- `LOG_FORMAT`: Log format (plain, json) - default: plain
+
+Use the `envy` crate to parse environment variables into strongly-typed configuration structs.
+
 ## Logging and Observability
 
 **Use `tracing` for all logging and internal observability metrics.** Guidelines:
@@ -100,9 +120,9 @@ Key concepts for implementing the PostgreSQL source:
 ## Development Setup
 
 To start development:
-1. Create `Cargo.toml` with appropriate dependencies (including `rdkafka` and `tracing`)
+1. Create `Cargo.toml` with appropriate dependencies (including `rdkafka`, `tracing`, and `envy`)
 2. Set up basic CLI argument parsing (consider `clap`)
-3. Implement configuration loading
+3. Implement configuration loading from environment variables using `envy`
 4. Create PostgreSQL connection with replication protocol
 5. Implement Kafka producer using `rdkafka` with proper error handling
 6. Set up tracing subscriber for logging and metrics
