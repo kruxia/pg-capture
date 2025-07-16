@@ -1,7 +1,7 @@
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum ChangeOperation {
     Insert,
@@ -44,5 +44,10 @@ impl SourceMetadata {
             lsn,
             xid: None,
         }
+    }
+    
+    pub fn with_xid(mut self, xid: u32) -> Self {
+        self.xid = Some(xid);
+        self
     }
 }

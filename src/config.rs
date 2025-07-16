@@ -129,3 +129,9 @@ fn default_checkpoint_interval_secs() -> u64 {
 fn default_max_buffer_size() -> usize {
     1000
 }
+
+impl KafkaConfig {
+    pub fn topic_name(&self, schema: &str, table: &str) -> String {
+        format!("{}.{}.{}", self.topic_prefix, schema, table)
+    }
+}
