@@ -172,5 +172,3 @@ mod tests {
 
 // Helper function to test the parsing functions
 // This makes the internal functions accessible for testing
-pub use crate::postgres::decoder::parse_postgres_value;
-pub use crate::postgres::decoder::parse_postgres_binary_value;

@@ -3,7 +3,7 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("Configuration error: {0}")]
-    Config(#[from] config::ConfigError),
+    Config(String),
     
     #[error("PostgreSQL error: {0}")]
     Postgres(#[from] tokio_postgres::Error),

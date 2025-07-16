@@ -40,17 +40,17 @@ mod tests {
         let mut buf = create_xlogdata_header(0, 0);
         buf.put_u8(b'R'); // RELATION
         buf.put_u32(rel_id);
+        buf.put_u8(schema.len() as u8);
         buf.put(schema.as_bytes());
-        buf.put_u8(0); // null terminator
+        buf.put_u8(table.len() as u8);
         buf.put(table.as_bytes());
-        buf.put_u8(0); // null terminator
         buf.put_u8(b'n'); // replica identity
         buf.put_u16(columns.len() as u16);
         
         for (name, type_id, is_key) in columns {
             buf.put_u8(if is_key { 1 } else { 0 });
+            buf.put_u8(name.len() as u8);
             buf.put(name.as_bytes());
-            buf.put_u8(0); // null terminator
             buf.put_u32(type_id);
             buf.put_i32(-1); // type modifier
         }
@@ -348,7 +348,9 @@ mod tests {
                 assert_eq!(after["int2_col"], 123);
                 assert_eq!(after["int4_col"], 45678);
                 assert_eq!(after["int8_col"], 9876543210i64);
-                assert_eq!(after["float4_col"], 3.14);
+                // Float4 has limited precision, so we need to compare with tolerance
+                let float4_val = after["float4_col"].as_f64().unwrap();
+                assert!((float4_val - 3.14).abs() < 0.001);
                 assert_eq!(after["float8_col"], 2.718281828);
                 assert_eq!(after["text_col"], "Hello, World!");
                 assert_eq!(after["json_col"]["key"], "value");

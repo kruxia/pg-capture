@@ -156,6 +156,11 @@ impl PgOutputDecoder {
             let is_key = (flags & 1) != 0;
             
             let col_name_len = cursor.get_u8() as usize;
+            if cursor.remaining() < col_name_len {
+                return Err(Error::InvalidMessage {
+                    message: format!("Invalid column name length: {} (remaining: {})", col_name_len, cursor.remaining()),
+                });
+            }
             let col_name = String::from_utf8_lossy(&cursor[..col_name_len]).to_string();
             cursor.advance(col_name_len);
 
@@ -202,7 +207,7 @@ impl PgOutputDecoder {
             message: format!("Unknown relation ID: {}", rel_id),
         })?;
 
-        let tuple_data = self.decode_tuple_data(cursor, &relation.columns)?;
+        let tuple_data = self.decode_tuple_data(&mut cursor, &relation.columns)?;
 
         let event = ChangeEvent {
             schema: relation.schema.clone(),
@@ -242,17 +247,17 @@ impl PgOutputDecoder {
             let tuple_type = cursor.get_u8();
             match tuple_type {
                 b'O' | b'K' => {
-                    old_tuple = Some(self.decode_tuple_data(cursor, &relation.columns)?);
+                    old_tuple = Some(self.decode_tuple_data(&mut cursor, &relation.columns)?);
                     // Check for new tuple
                     if cursor.remaining() > 0 {
                         let next_type = cursor.get_u8();
                         if next_type == b'N' {
-                            new_tuple = Some(self.decode_tuple_data(cursor, &relation.columns)?);
+                            new_tuple = Some(self.decode_tuple_data(&mut cursor, &relation.columns)?);
                         }
                     }
                 }
                 b'N' => {
-                    new_tuple = Some(self.decode_tuple_data(cursor, &relation.columns)?);
+                    new_tuple = Some(self.decode_tuple_data(&mut cursor, &relation.columns)?);
                 }
                 _ => {
                     return Err(Error::InvalidMessage {
@@ -300,7 +305,7 @@ impl PgOutputDecoder {
             message: format!("Unknown relation ID: {}", rel_id),
         })?;
 
-        let old_tuple = self.decode_tuple_data(cursor, &relation.columns)?;
+        let old_tuple = self.decode_tuple_data(&mut cursor, &relation.columns)?;
 
         let event = ChangeEvent {
             schema: relation.schema.clone(),
@@ -326,7 +331,7 @@ impl PgOutputDecoder {
         Ok(None)
     }
 
-    fn decode_tuple_data(&self, mut cursor: &[u8], columns: &[ColumnInfo]) -> Result<serde_json::Value> {
+    fn decode_tuple_data(&self, cursor: &mut &[u8], columns: &[ColumnInfo]) -> Result<serde_json::Value> {
         let num_columns = cursor.get_u16();
         
         if num_columns as usize != columns.len() {

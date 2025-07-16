@@ -1,6 +1,5 @@
 use clap::Parser;
-use pg_replicate_kafka::{Config, Error, Result, Replicator};
-use std::path::PathBuf;
+use pg_replicate_kafka::{Config, Result, Replicator};
 use tracing::{error, info};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
 
@@ -9,9 +8,6 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilte
 #[command(about = "PostgreSQL to Kafka CDC replicator", long_about = None)]
 #[command(version)]
 struct Args {
-    #[arg(short, long, value_name = "FILE", default_value = "config.toml")]
-    config: PathBuf,
-    
     #[arg(short, long, help = "Enable JSON output for logs")]
     json_logs: bool,
     
@@ -26,16 +22,22 @@ async fn main() -> Result<()> {
     init_logging(args.json_logs, args.verbose);
     
     info!("Starting pg-replicate-kafka v{}", env!("CARGO_PKG_VERSION"));
-    info!("Loading configuration from {:?}", args.config);
+    info!("Loading configuration from environment variables");
     
-    let config = match Config::from_file(&args.config) {
+    let config = match Config::from_env() {
         Ok(cfg) => {
             info!("Configuration loaded successfully");
             cfg
         }
         Err(e) => {
             error!("Failed to load configuration: {}", e);
-            return Err(Error::Config(e));
+            eprintln!("\nRequired environment variables:");
+            eprintln!("  PG_DATABASE      - PostgreSQL database name");
+            eprintln!("  PG_USERNAME      - PostgreSQL username");
+            eprintln!("  PG_PASSWORD      - PostgreSQL password");
+            eprintln!("  KAFKA_BROKERS    - Comma-separated list of Kafka brokers");
+            eprintln!("\nSee .envrc.example for all available options");
+            std::process::exit(1);
         }
     };
     

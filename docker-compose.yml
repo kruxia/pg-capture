@@ -7,7 +7,7 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: testdb
+      POSTGRES_DB: mydb
     command: >
       postgres
       -c wal_level=logical
@@ -17,6 +17,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -31,8 +32,8 @@ services:
       KAFKA_CFG_PROCESS_ROLES: controller,broker
       KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 0@kafka:9093
       KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
-      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
-      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:9092
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
       KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_CFG_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
@@ -46,7 +47,7 @@ services:
       timeout: 10s
       retries: 5
 
-  # pg-replicate-kafka
+  # pg-replicate-kafka for local development
   pg-replicate-kafka:
     build:
       context: .
@@ -57,14 +58,36 @@ services:
       kafka:
         condition: service_healthy
     volumes:
-      - ./config:/etc/pg-replicate-kafka:ro
       - checkpoint_data:/var/lib/pg-replicate-kafka
     environment:
+      # PostgreSQL configuration
+      PG_HOST: postgres
+      PG_PORT: 5432
+      PG_DATABASE: mydb
+      PG_USERNAME: postgres
+      PG_PASSWORD: postgres
+      PG_PUBLICATION: my_publication
+      PG_SLOT_NAME: pg_replicate_kafka_slot
+      
+      # Kafka configuration
+      KAFKA_BROKERS: kafka:9092
+      KAFKA_TOPIC_PREFIX: cdc
+      KAFKA_COMPRESSION: snappy
+      KAFKA_ACKS: all
+      
+      # Replication configuration
+      REPLICATION_POLL_INTERVAL_MS: 100
+      REPLICATION_KEEPALIVE_INTERVAL_SECS: 10
+      REPLICATION_CHECKPOINT_INTERVAL_SECS: 10
+      REPLICATION_CHECKPOINT_FILE: /var/lib/pg-replicate-kafka/checkpoint.json
+      
+      # Logging
       RUST_LOG: pg_replicate_kafka=info
-    command: ["--config", "/etc/pg-replicate-kafka/docker.toml"]
     restart: unless-stopped
+    profiles:
+      - app
 
-  # Kafka UI for monitoring (optional)
+  # Kafka UI for monitoring
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
     depends_on:
@@ -74,8 +97,21 @@ services:
     environment:
       KAFKA_CLUSTERS_0_NAME: local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      DYNAMIC_CONFIG_ENABLED: "true"
+
+  # Development tools
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
     profiles:
-      - monitoring
+      - tools
 
 volumes:
   postgres_data:

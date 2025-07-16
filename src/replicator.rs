@@ -22,8 +22,10 @@ pub struct Replicator {
 
 impl Replicator {
     pub fn new(config: Config) -> Self {
-        // Default checkpoint path if not specified
-        let checkpoint_path = std::path::Path::new("checkpoint.json");
+        // Use checkpoint path from config, or default to checkpoint.json
+        let checkpoint_path = config.replication.checkpoint_file
+            .clone()
+            .unwrap_or_else(|| std::path::PathBuf::from("checkpoint.json"));
         
         Self { 
             config,
@@ -32,7 +34,7 @@ impl Replicator {
             topic_manager: None,
             shutdown_receiver: None,
             decoder: None,
-            checkpoint_manager: CheckpointManager::new(checkpoint_path),
+            checkpoint_manager: CheckpointManager::new(&checkpoint_path),
             current_lsn: None,
             total_message_count: 0,
         }

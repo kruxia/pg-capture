@@ -1,10 +1,11 @@
-use pg_replicate_kafka::config::{Config, KafkaConfig, PostgresConfig, ReplicationConfig};
+use pg_replicate_kafka::config::{Config, KafkaConfig, PostgresConfig, ReplicationConfig, SslMode};
 use pg_replicate_kafka::replicator::Replicator;
 use rdkafka::config::ClientConfig;
 use rdkafka::consumer::{Consumer, StreamConsumer};
 use rdkafka::Message;
 use serde_json::Value;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::time::Duration;
 use tokio::time::timeout;
 use tokio_postgres::{Client, NoTls};
@@ -25,11 +26,11 @@ async fn test_no_duplicate_messages() {
     test_config.replication.checkpoint_interval_secs = 1;
     let checkpoint_file = format!("/tmp/pg_replicate_kafka_eo_test_{}.checkpoint", 
                                    std::process::id());
-    test_config.replication.checkpoint_file = Some(checkpoint_file.clone());
+    test_config.replication.checkpoint_file = Some(PathBuf::from(checkpoint_file.clone()));
 
     // Start replicator
-    let replicator = Replicator::new(test_config.clone());
-    let handle = tokio::spawn(async move {
+    let mut replicator = Replicator::new(test_config.clone());
+    let mut handle = tokio::spawn(async move {
         replicator.run().await
     });
 
@@ -51,7 +52,7 @@ async fn test_no_duplicate_messages() {
             tokio::time::sleep(Duration::from_millis(500)).await;
             
             // Restart replicator
-            let replicator = Replicator::new(test_config.clone());
+            let mut replicator = Replicator::new(test_config.clone());
             let new_handle = tokio::spawn(async move {
                 replicator.run().await
             });
@@ -74,7 +75,7 @@ async fn test_no_duplicate_messages() {
     let start = tokio::time::Instant::now();
     
     while start.elapsed() < timeout_duration {
-        if let Ok(Some(message)) = timeout(Duration::from_millis(500), consumer.recv()).await {
+        if let Ok(Ok(message)) = timeout(Duration::from_millis(500), consumer.recv()).await {
             if let Some(payload) = message.payload() {
                 let json: Value = serde_json::from_slice(payload).unwrap();
                 if json["op"] == "INSERT" && json["table"] == "exactly_once_test" {
@@ -125,15 +126,15 @@ async fn test_checkpoint_consistency() {
     // Configure with checkpoint
     let checkpoint_file = format!("/tmp/pg_replicate_kafka_consistency_test_{}.checkpoint", 
                                    std::process::id());
-    test_config.replication.checkpoint_file = Some(checkpoint_file.clone());
+    test_config.replication.checkpoint_file = Some(PathBuf::from(checkpoint_file.clone()));
     test_config.replication.checkpoint_interval_secs = 1;
 
     // Track LSNs for verification
-    let mut lsn_before_crash = None;
+    let mut _lsn_before_crash = None;
 
     // First run: process some messages and crash
     {
-        let replicator = Replicator::new(test_config.clone());
+        let mut replicator = Replicator::new(test_config.clone());
         let handle = tokio::spawn(async move {
             replicator.run().await
         });
@@ -154,7 +155,7 @@ async fn test_checkpoint_consistency() {
         // Get current LSN before crash
         let row = client.query_one("SELECT pg_current_wal_lsn()", &[]).await.unwrap();
         let lsn: String = row.get(0);
-        lsn_before_crash = Some(lsn.clone());
+        _lsn_before_crash = Some(lsn.clone());
         info!("LSN before crash: {}", lsn);
 
         // Crash
@@ -171,7 +172,7 @@ async fn test_checkpoint_consistency() {
 
     // Second run: should resume from checkpoint
     {
-        let replicator = Replicator::new(test_config.clone());
+        let mut replicator = Replicator::new(test_config.clone());
         let _handle = tokio::spawn(async move {
             replicator.run().await
         });
@@ -189,7 +190,7 @@ async fn test_checkpoint_consistency() {
     let start = tokio::time::Instant::now();
     
     while start.elapsed() < timeout_duration {
-        if let Ok(Some(message)) = timeout(Duration::from_millis(500), consumer.recv()).await {
+        if let Ok(Ok(message)) = timeout(Duration::from_millis(500), consumer.recv()).await {
             if let Some(payload) = message.payload() {
                 let json: Value = serde_json::from_slice(payload).unwrap();
                 if json["op"] == "INSERT" && json["table"] == "exactly_once_test" {
@@ -232,7 +233,7 @@ async fn test_transaction_boundaries() {
     let (client, test_config) = setup_exactly_once_test().await;
     
     // Start replicator
-    let replicator = Replicator::new(test_config.clone());
+    let mut replicator = Replicator::new(test_config.clone());
     let _handle = tokio::spawn(async move {
         replicator.run().await
     });
@@ -272,7 +273,7 @@ async fn test_transaction_boundaries() {
     let start = tokio::time::Instant::now();
     
     while start.elapsed() < timeout_duration {
-        if let Ok(Some(message)) = timeout(Duration::from_millis(500), consumer.recv()).await {
+        if let Ok(Ok(message)) = timeout(Duration::from_millis(500), consumer.recv()).await {
             if let Some(payload) = message.payload() {
                 let json: Value = serde_json::from_slice(payload).unwrap();
                 if json["op"] == "INSERT" && json["table"] == "exactly_once_test" {
@@ -308,6 +309,8 @@ async fn setup_exactly_once_test() -> (Client, Config) {
         password: "postgres".to_string(),
         publication: "exactly_once_publication".to_string(),
         slot_name: format!("exactly_once_slot_{}", std::process::id()),
+        connect_timeout_secs: 30,
+        ssl_mode: SslMode::Disable,
     };
 
     let (client, connection) = tokio_postgres::connect(
@@ -356,8 +359,11 @@ async fn setup_exactly_once_test() -> (Client, Config) {
     let kafka_config = KafkaConfig {
         brokers: vec!["localhost:9092".to_string()],
         topic_prefix: format!("exactly_once_{}", std::process::id()),
-        compression: None,
+        compression: "none".to_string(),
         acks: "all".to_string(), // Required for exactly-once
+        linger_ms: 0,
+        batch_size: 16384,
+        buffer_memory: 33554432,
     };
 
     let replication_config = ReplicationConfig {
@@ -365,6 +371,7 @@ async fn setup_exactly_once_test() -> (Client, Config) {
         keepalive_interval_secs: 10,
         checkpoint_interval_secs: 2,
         checkpoint_file: None,
+        max_buffer_size: 1000,
     };
 
     let config = Config {

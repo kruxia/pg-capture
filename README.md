@@ -60,44 +60,71 @@ docker-compose exec kafka kafka-console-consumer.sh \
 # Install from source
 cargo install --path .
 
-# Run with configuration file
-pg-replicate-kafka --config config/example.toml
-
-# Or use environment variables
-export PG_HOST=localhost
-export PG_PORT=5432
+# Set required environment variables
 export PG_DATABASE=mydb
 export PG_USERNAME=replicator
 export PG_PASSWORD=secret
 export KAFKA_BROKERS=localhost:9092
+
+# Run with optional environment variables
+export PG_HOST=localhost  # default: localhost
+export PG_PORT=5432       # default: 5432
+export KAFKA_TOPIC_PREFIX=cdc  # default: cdc
+
 pg-replicate-kafka
+```
+
+### Using direnv for local development
+
+```bash
+# Copy example environment file
+cp .envrc.example .envrc
+
+# Edit with your settings
+vi .envrc
+
+# Allow direnv to load the environment
+direnv allow
 ```
 
 ## Configuration
 
-Create a `config.toml` file:
+pg-replicate-kafka uses environment variables for configuration. See `.envrc.example` for all available options.
 
-```toml
-[postgres]
-host = "localhost"
-port = 5432
-database = "mydb"
-username = "replicator"
-password = "secret"
-publication = "my_publication"
-slot_name = "pg_replicate_kafka_slot"
+### Required Environment Variables
 
-[kafka]
-brokers = ["localhost:9092"]
-topic_prefix = "cdc"
-compression = "snappy"  # Options: none, gzip, snappy, lz4, zstd
-acks = "all"           # Options: 0, 1, all
+```bash
+PG_DATABASE              # PostgreSQL database name
+PG_USERNAME              # PostgreSQL username
+PG_PASSWORD              # PostgreSQL password
+KAFKA_BROKERS            # Comma-separated list of Kafka brokers
+```
 
-[replication]
-poll_interval_ms = 100
-keepalive_interval_secs = 10
-checkpoint_interval_secs = 10
-checkpoint_file = "/var/lib/pg-replicate-kafka/checkpoint.json"
+### Optional Environment Variables
+
+```bash
+# PostgreSQL
+PG_HOST                  # default: localhost
+PG_PORT                  # default: 5432
+PG_PUBLICATION           # default: pg_replicate_kafka_pub
+PG_SLOT_NAME             # default: pg_replicate_kafka_slot
+PG_CONNECT_TIMEOUT_SECS  # default: 30
+PG_SSL_MODE              # default: disable (options: disable, prefer, require)
+
+# Kafka
+KAFKA_TOPIC_PREFIX       # default: cdc
+KAFKA_COMPRESSION        # default: snappy (options: none, gzip, snappy, lz4, zstd)
+KAFKA_ACKS               # default: all (options: 0, 1, all)
+KAFKA_LINGER_MS          # default: 100
+KAFKA_BATCH_SIZE         # default: 16384
+KAFKA_BUFFER_MEMORY      # default: 33554432 (32MB)
+
+# Replication
+REPLICATION_POLL_INTERVAL_MS         # default: 100
+REPLICATION_KEEPALIVE_INTERVAL_SECS  # default: 10
+REPLICATION_CHECKPOINT_INTERVAL_SECS # default: 10
+REPLICATION_CHECKPOINT_FILE          # optional checkpoint file path
+REPLICATION_MAX_BUFFER_SIZE          # default: 1000
 ```
 
 ### PostgreSQL Setup
@@ -172,9 +199,8 @@ Messages are published to Kafka in JSON format:
 pg-replicate-kafka [OPTIONS]
 
 OPTIONS:
-    -c, --config <FILE>       Path to configuration file [default: config.toml]
-    -v, --verbose            Increase logging verbosity
-    -q, --quiet              Decrease logging verbosity
+    -j, --json-logs          Enable JSON output for logs
+    -v, --verbose            Enable verbose logging (debug level)
     -h, --help               Print help information
     -V, --version            Print version information
 ```
@@ -186,10 +212,12 @@ OPTIONS:
 ```bash
 docker run -d \
   --name pg-replicate-kafka \
-  -v $(pwd)/config:/etc/pg-replicate-kafka:ro \
+  -e PG_DATABASE=mydb \
+  -e PG_USERNAME=replicator \
+  -e PG_PASSWORD=secret \
+  -e KAFKA_BROKERS=kafka:9092 \
   -v pg-replicate-kafka-data:/var/lib/pg-replicate-kafka \
-  ghcr.io/yourusername/pg-replicate-kafka:latest \
-  --config /etc/pg-replicate-kafka/config.toml
+  ghcr.io/yourusername/pg-replicate-kafka:latest
 ```
 
 ### Building Custom Image
@@ -198,12 +226,28 @@ docker run -d \
 # Build the image
 docker build -t pg-replicate-kafka:latest .
 
-# Run with custom config
+# Run with environment variables
 docker run -d \
   --name pg-replicate-kafka \
-  -v $(pwd)/myconfig.toml:/etc/pg-replicate-kafka/config.toml:ro \
-  pg-replicate-kafka:latest \
-  --config /etc/pg-replicate-kafka/config.toml
+  --env-file .env \
+  -v pg-replicate-kafka-data:/var/lib/pg-replicate-kafka \
+  pg-replicate-kafka:latest
+```
+
+### Local Development with Docker Compose
+
+```bash
+# Start all services (PostgreSQL, Kafka, Kafka UI)
+docker-compose up -d
+
+# Start with pg-replicate-kafka
+docker-compose --profile app up -d
+
+# View logs
+docker-compose logs -f pg-replicate-kafka
+
+# Run integration tests
+docker-compose -f docker-compose.test.yml up --abort-on-container-exit
 ```
 
 ## Monitoring

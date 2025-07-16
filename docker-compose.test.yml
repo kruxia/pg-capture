@@ -1,0 +1,133 @@
+version: '3.8'
+
+# Docker Compose configuration for integration testing
+# Usage: docker-compose -f docker-compose.test.yml up --abort-on-container-exit --exit-code-from test-runner
+
+services:
+  # PostgreSQL for testing
+  postgres-test:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: testdb
+    command: >
+      postgres
+      -c wal_level=logical
+      -c max_replication_slots=10
+      -c max_wal_senders=10
+      -c shared_preload_libraries=pg_stat_statements
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+    networks:
+      - test-network
+
+  # Kafka for testing
+  kafka-test:
+    image: bitnami/kafka:3.6
+    environment:
+      KAFKA_CFG_NODE_ID: 0
+      KAFKA_CFG_PROCESS_ROLES: controller,broker
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 0@kafka-test:9093
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka-test:9092
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_CFG_LOG_RETENTION_HOURS: 1
+      KAFKA_CFG_LOG_SEGMENT_BYTES: 1048576
+    healthcheck:
+      test: ["CMD", "kafka-topics.sh", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 5s
+      timeout: 10s
+      retries: 10
+    networks:
+      - test-network
+
+  # Test runner
+  test-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+      args:
+        RUST_VERSION: "1.75"
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+      kafka-test:
+        condition: service_healthy
+    environment:
+      # Test database configuration
+      TEST_PG_HOST: postgres-test
+      TEST_PG_PORT: 5432
+      TEST_PG_DATABASE: testdb
+      TEST_PG_USERNAME: postgres
+      TEST_PG_PASSWORD: postgres
+      
+      # Test Kafka configuration
+      TEST_KAFKA_BROKERS: kafka-test:9092
+      
+      # Test configuration
+      RUST_LOG: pg_replicate_kafka=debug,rdkafka=info
+      RUST_BACKTRACE: 1
+      
+      # Override default test timeouts
+      TEST_TIMEOUT_SECONDS: 300
+    volumes:
+      - ./target:/app/target
+      - cargo-cache:/usr/local/cargo/registry
+      - cargo-git:/usr/local/cargo/git
+    networks:
+      - test-network
+    command: |
+      bash -c "
+        echo 'Running integration tests...'
+        cargo test --test integration_test -- --ignored --test-threads=1 --nocapture
+        cargo test --test failure_scenarios_test -- --ignored --test-threads=1 --nocapture
+        cargo test --test exactly_once_test -- --ignored --test-threads=1 --nocapture
+        cargo test --test checkpoint_test
+        echo 'All tests completed successfully!'
+      "
+
+  # Performance test runner (optional profile)
+  perf-test-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+      kafka-test:
+        condition: service_healthy
+    environment:
+      TEST_PG_HOST: postgres-test
+      TEST_PG_PORT: 5432
+      TEST_PG_DATABASE: testdb
+      TEST_PG_USERNAME: postgres
+      TEST_PG_PASSWORD: postgres
+      TEST_KAFKA_BROKERS: kafka-test:9092
+      RUST_LOG: pg_replicate_kafka=info
+    volumes:
+      - ./target:/app/target
+      - cargo-cache:/usr/local/cargo/registry
+    networks:
+      - test-network
+    profiles:
+      - performance
+    command: |
+      bash -c "
+        echo 'Running performance tests...'
+        cargo test --test performance_test -- --ignored --test-threads=1 --nocapture
+      "
+
+networks:
+  test-network:
+    driver: bridge
+
+volumes:
+  cargo-cache:
+  cargo-git:

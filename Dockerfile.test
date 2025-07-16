@@ -1,0 +1,30 @@
+# Dockerfile for running integration tests
+ARG RUST_VERSION=1.75
+
+FROM rust:${RUST_VERSION} AS test-runner
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    postgresql-client \
+    netcat-traditional \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create app directory
+WORKDIR /app
+
+# Copy manifests first for better caching
+COPY Cargo.toml Cargo.lock ./
+
+# Copy source code
+COPY src ./src
+COPY tests ./tests
+COPY examples ./examples
+
+# Build dependencies (this layer will be cached)
+RUN cargo build --tests --release
+
+# Set test environment
+ENV CARGO_TARGET_DIR=/app/target
+
+# Default command runs all tests
+CMD ["cargo", "test", "--", "--ignored", "--test-threads=1"]

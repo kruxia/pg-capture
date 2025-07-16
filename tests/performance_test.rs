@@ -1,4 +1,4 @@
-use pg_replicate_kafka::config::{Config, KafkaConfig, PostgresConfig, ReplicationConfig};
+use pg_replicate_kafka::config::{Config, KafkaConfig, PostgresConfig, ReplicationConfig, SslMode};
 use pg_replicate_kafka::replicator::Replicator;
 use rdkafka::config::ClientConfig;
 use rdkafka::consumer::{Consumer, StreamConsumer};
@@ -21,7 +21,7 @@ async fn test_throughput() {
     let (client, test_config) = setup_performance_test().await;
     
     // Start replicator
-    let replicator = Replicator::new(test_config.clone());
+    let mut replicator = Replicator::new(test_config.clone());
     let replicator_handle = tokio::spawn(async move {
         replicator.run().await
     });
@@ -41,7 +41,7 @@ async fn test_throughput() {
     
     let consumer_handle = tokio::spawn(async move {
         loop {
-            if let Ok(Some(message)) = timeout(Duration::from_millis(100), consumer.recv()).await {
+            if let Ok(Ok(message)) = timeout(Duration::from_millis(100), consumer.recv()).await {
                 if let Some(payload) = message.payload() {
                     messages_received_clone.fetch_add(1, Ordering::Relaxed);
                     bytes_received_clone.fetch_add(payload.len() as u64, Ordering::Relaxed);
@@ -135,7 +135,7 @@ async fn test_memory_usage() {
     info!("Initial memory usage: {} MB", initial_memory / 1024 / 1024);
 
     // Start replicator
-    let replicator = Replicator::new(test_config.clone());
+    let mut replicator = Replicator::new(test_config.clone());
     let replicator_handle = tokio::spawn(async move {
         replicator.run().await
     });
@@ -225,6 +225,8 @@ async fn setup_performance_test() -> (Client, Config) {
         password: "postgres".to_string(),
         publication: "perf_publication".to_string(),
         slot_name: format!("perf_slot_{}", std::process::id()),
+        connect_timeout_secs: 30,
+        ssl_mode: SslMode::Disable,
     };
 
     let (client, connection) = tokio_postgres::connect(
@@ -273,8 +275,11 @@ async fn setup_performance_test() -> (Client, Config) {
     let kafka_config = KafkaConfig {
         brokers: vec!["localhost:9092".to_string()],
         topic_prefix: format!("perf_{}", std::process::id()),
-        compression: Some("snappy".to_string()),
+        compression: "snappy".to_string(),
         acks: "1".to_string(), // Less strict for performance testing
+        linger_ms: 0,
+        batch_size: 16384,
+        buffer_memory: 33554432,
     };
 
     let replication_config = ReplicationConfig {
@@ -282,6 +287,7 @@ async fn setup_performance_test() -> (Client, Config) {
         keepalive_interval_secs: 10,
         checkpoint_interval_secs: 10, // Less frequent checkpoints
         checkpoint_file: None,
+        max_buffer_size: 1000,
     };
 
     let config = Config {

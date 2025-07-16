@@ -1,9 +1,10 @@
-use pg_replicate_kafka::config::{Config, KafkaConfig, PostgresConfig, ReplicationConfig};
+use pg_replicate_kafka::config::{Config, KafkaConfig, PostgresConfig, ReplicationConfig, SslMode};
 use pg_replicate_kafka::replicator::Replicator;
 use rdkafka::config::ClientConfig;
 use rdkafka::consumer::{Consumer, StreamConsumer};
 use rdkafka::Message;
 use serde_json::Value;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
@@ -23,7 +24,7 @@ async fn test_postgres_connection_failure() {
     let (client, mut test_config) = setup_failure_test().await;
     
     // Start replicator
-    let replicator = Replicator::new(test_config.clone());
+    let mut replicator = Replicator::new(test_config.clone());
     let replicator_handle = tokio::spawn(async move {
         replicator.run().await
     });
@@ -56,7 +57,7 @@ async fn test_postgres_connection_failure() {
     let start = tokio::time::Instant::now();
     
     while received_statuses.len() < 2 && start.elapsed() < timeout_duration {
-        if let Ok(Some(message)) = timeout(Duration::from_secs(1), consumer.recv()).await {
+        if let Ok(Ok(message)) = timeout(Duration::from_secs(1), consumer.recv()).await {
             if let Some(payload) = message.payload() {
                 let json: Value = serde_json::from_slice(payload).unwrap();
                 if json["op"] == "INSERT" {
@@ -94,7 +95,7 @@ async fn test_kafka_connection_failure() {
     test_config.kafka.brokers = vec![format!("localhost:{}", proxy_port)];
 
     // Start replicator
-    let replicator = Replicator::new(test_config.clone());
+    let mut replicator = Replicator::new(test_config.clone());
     let replicator_handle = tokio::spawn(async move {
         replicator.run().await
     });
@@ -144,7 +145,7 @@ async fn test_kafka_connection_failure() {
     let start = tokio::time::Instant::now();
     
     while received_count < expected_count && start.elapsed() < timeout_duration {
-        if let Ok(Some(message)) = timeout(Duration::from_secs(1), consumer.recv()).await {
+        if let Ok(Ok(message)) = timeout(Duration::from_secs(1), consumer.recv()).await {
             if let Some(payload) = message.payload() {
                 let json: Value = serde_json::from_slice(payload).unwrap();
                 if json["op"] == "INSERT" && json["table"] == "failure_test" {
@@ -176,7 +177,7 @@ async fn test_replicator_crash_recovery() {
     // Use a specific checkpoint file
     let checkpoint_file = format!("/tmp/pg_replicate_kafka_crash_test_{}.checkpoint", 
                                    std::process::id());
-    test_config.replication.checkpoint_file = Some(checkpoint_file.clone());
+    test_config.replication.checkpoint_file = Some(PathBuf::from(checkpoint_file.clone()));
     test_config.replication.checkpoint_interval_secs = 1; // Frequent checkpoints
 
     // Insert some initial data
@@ -188,7 +189,7 @@ async fn test_replicator_crash_recovery() {
     }
 
     // Start replicator
-    let replicator = Replicator::new(test_config.clone());
+    let mut replicator = Replicator::new(test_config.clone());
     let handle = tokio::spawn(async move {
         replicator.run().await
     });
@@ -209,7 +210,7 @@ async fn test_replicator_crash_recovery() {
     }
 
     // Start new replicator instance - should resume from checkpoint
-    let replicator = Replicator::new(test_config.clone());
+    let mut replicator = Replicator::new(test_config.clone());
     let _handle = tokio::spawn(async move {
         replicator.run().await
     });
@@ -233,7 +234,7 @@ async fn test_replicator_crash_recovery() {
     let start = tokio::time::Instant::now();
     
     while received_count < expected_count && start.elapsed() < timeout_duration {
-        if let Ok(Some(message)) = timeout(Duration::from_secs(1), consumer.recv()).await {
+        if let Ok(Ok(message)) = timeout(Duration::from_secs(1), consumer.recv()).await {
             if let Some(payload) = message.payload() {
                 let json: Value = serde_json::from_slice(payload).unwrap();
                 if json["op"] == "INSERT" && json["table"] == "failure_test" {
@@ -281,7 +282,7 @@ async fn test_malformed_replication_data() {
     ).await.unwrap();
 
     // Start replicator
-    let replicator = Replicator::new(test_config.clone());
+    let mut replicator = Replicator::new(test_config.clone());
     let replicator_handle = tokio::spawn(async move {
         replicator.run().await
     });
@@ -290,26 +291,26 @@ async fn test_malformed_replication_data() {
     tokio::time::sleep(Duration::from_secs(2)).await;
 
     // Insert data with edge cases
-    let test_cases = vec![
+    let test_cases: Vec<String> = vec![
         // Valid JSON
-        "INSERT INTO complex_types (json_data) VALUES ('{\"key\": \"value\"}'::jsonb)",
+        "INSERT INTO complex_types (json_data) VALUES ('{\"key\": \"value\"}'::jsonb)".to_string(),
         // Nested JSON
-        "INSERT INTO complex_types (json_data) VALUES ('{\"nested\": {\"deep\": [1,2,3]}}'::jsonb)",
+        "INSERT INTO complex_types (json_data) VALUES ('{\"nested\": {\"deep\": [1,2,3]}}'::jsonb)".to_string(),
         // Array data
-        "INSERT INTO complex_types (array_data) VALUES (ARRAY[1,2,3,4,5])",
+        "INSERT INTO complex_types (array_data) VALUES (ARRAY[1,2,3,4,5])".to_string(),
         // Binary data
-        "INSERT INTO complex_types (binary_data) VALUES ('\\xDEADBEEF'::bytea)",
+        "INSERT INTO complex_types (binary_data) VALUES ('\\xDEADBEEF'::bytea)".to_string(),
         // Large text
-        &format!("INSERT INTO complex_types (large_text) VALUES ('{}')", "x".repeat(10000)),
+        format!("INSERT INTO complex_types (large_text) VALUES ('{}')", "x".repeat(10000)),
         // NULL values
-        "INSERT INTO complex_types (json_data, array_data) VALUES (NULL, NULL)",
+        "INSERT INTO complex_types (json_data, array_data) VALUES (NULL, NULL)".to_string(),
         // Empty array
-        "INSERT INTO complex_types (array_data) VALUES (ARRAY[]::integer[])",
+        "INSERT INTO complex_types (array_data) VALUES (ARRAY[]::integer[])".to_string(),
     ];
 
     for (i, sql) in test_cases.iter().enumerate() {
         info!("Executing test case {}: {}", i, sql.split_whitespace().take(5).collect::<Vec<_>>().join(" "));
-        client.execute(sql, &[]).await.unwrap();
+        client.execute(sql.as_str(), &[]).await.unwrap();
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
 
@@ -333,7 +334,7 @@ async fn test_malformed_replication_data() {
     let start = tokio::time::Instant::now();
     
     while start.elapsed() < timeout_duration {
-        if let Ok(Some(message)) = timeout(Duration::from_millis(500), consumer.recv()).await {
+        if let Ok(Ok(message)) = timeout(Duration::from_millis(500), consumer.recv()).await {
             if let Some(payload) = message.payload() {
                 // Verify it's valid JSON
                 let json: Value = serde_json::from_slice(payload)
@@ -371,6 +372,8 @@ async fn setup_failure_test() -> (Client, Config) {
         password: "postgres".to_string(),
         publication: "failure_publication".to_string(),
         slot_name: format!("failure_slot_{}", std::process::id()),
+        connect_timeout_secs: 30,
+        ssl_mode: SslMode::Disable,
     };
 
     let (client, connection) = tokio_postgres::connect(
@@ -418,8 +421,11 @@ async fn setup_failure_test() -> (Client, Config) {
     let kafka_config = KafkaConfig {
         brokers: vec!["localhost:9092".to_string()],
         topic_prefix: format!("failure_{}", std::process::id()),
-        compression: None,
+        compression: "none".to_string(),
         acks: "all".to_string(),
+        linger_ms: 0,
+        batch_size: 16384,
+        buffer_memory: 33554432,
     };
 
     let replication_config = ReplicationConfig {
@@ -427,6 +433,7 @@ async fn setup_failure_test() -> (Client, Config) {
         keepalive_interval_secs: 10,
         checkpoint_interval_secs: 5,
         checkpoint_file: None,
+        max_buffer_size: 1000,
     };
 
     let config = Config {
@@ -481,17 +488,21 @@ async fn start_kafka_proxy(
         info!("Kafka proxy listening on port {}", proxy_port);
         
         while running.load(Ordering::Relaxed) {
-            if let Ok((inbound, _)) = timeout(Duration::from_millis(100), listener.accept()).await {
+            if let Ok(Ok((inbound, _))) = timeout(Duration::from_millis(100), listener.accept()).await {
                 if let Ok(outbound) = tokio::net::TcpStream::connect(&target).await {
                     let (ri, wi) = inbound.into_split();
                     let (ro, wo) = outbound.into_split();
                     
                     tokio::spawn(async move {
-                        let _ = tokio::io::copy(&mut ri.into(), &mut wo.into()).await;
+                        let mut ri = ri;
+                        let mut wo = wo;
+                        let _ = tokio::io::copy(&mut ri, &mut wo).await;
                     });
                     
                     tokio::spawn(async move {
-                        let _ = tokio::io::copy(&mut ro.into(), &mut wi.into()).await;
+                        let mut ro = ro;
+                        let mut wi = wi;
+                        let _ = tokio::io::copy(&mut ro, &mut wi).await;
                     });
                 }
             }

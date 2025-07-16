@@ -1,0 +1,40 @@
+# pg-replicate-kafka environment configuration
+# Copy this file to .envrc and update with your values
+# Use direnv to automatically load these variables: https://direnv.net/
+
+# PostgreSQL Configuration (Required)
+export PG_DATABASE="mydb"
+export PG_USERNAME="replicator"
+export PG_PASSWORD="secret"
+
+# PostgreSQL Configuration (Optional - defaults shown)
+export PG_HOST="localhost"
+export PG_PORT="5432"
+export PG_PUBLICATION="pg_replicate_kafka_pub"
+export PG_SLOT_NAME="pg_replicate_kafka_slot"
+export PG_CONNECT_TIMEOUT_SECS="30"
+export PG_SSL_MODE="disable"  # Options: disable, prefer, require
+
+# Kafka Configuration (Required)
+export KAFKA_BROKERS="localhost:9092"  # Comma-separated list
+
+# Kafka Configuration (Optional - defaults shown)
+export KAFKA_TOPIC_PREFIX="cdc"
+export KAFKA_COMPRESSION="snappy"  # Options: none, gzip, snappy, lz4, zstd
+export KAFKA_ACKS="all"  # Options: 0, 1, all
+export KAFKA_LINGER_MS="100"
+export KAFKA_BATCH_SIZE="16384"
+export KAFKA_BUFFER_MEMORY="33554432"  # 32MB
+
+# Replication Configuration (Optional - defaults shown)
+export REPLICATION_POLL_INTERVAL_MS="100"
+export REPLICATION_KEEPALIVE_INTERVAL_SECS="10"
+export REPLICATION_CHECKPOINT_INTERVAL_SECS="10"
+export REPLICATION_CHECKPOINT_FILE="./checkpoint.json"  # Optional - no checkpointing if not set
+export REPLICATION_MAX_BUFFER_SIZE="1000"
+
+# Logging Configuration
+export RUST_LOG="pg_replicate_kafka=info"  # Options: error, warn, info, debug, trace
+
+# Development helpers
+export RUST_BACKTRACE="1"  # Show stack traces on panic

@@ -43,10 +43,6 @@ RUN addgroup -g 1000 pgrepkafka && \
 # Copy binary from builder
 COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/pg-replicate-kafka /usr/local/bin/pg-replicate-kafka
 
-# Create config directory
-RUN mkdir -p /etc/pg-replicate-kafka && \
-    chown -R pgrepkafka:pgrepkafka /etc/pg-replicate-kafka
-
 # Create checkpoint directory
 RUN mkdir -p /var/lib/pg-replicate-kafka && \
     chown -R pgrepkafka:pgrepkafka /var/lib/pg-replicate-kafka
@@ -55,7 +51,7 @@ RUN mkdir -p /var/lib/pg-replicate-kafka && \
 USER pgrepkafka
 
 # Set working directory
-WORKDIR /etc/pg-replicate-kafka
+WORKDIR /var/lib/pg-replicate-kafka
 
 # Expose metrics port (for future use)
 EXPOSE 9090
@@ -70,4 +66,4 @@ LABEL org.opencontainers.image.description="PostgreSQL to Kafka CDC replicator"
 LABEL org.opencontainers.image.version="0.1.0"
 LABEL org.opencontainers.image.authors="pg-replicate-kafka contributors"
 LABEL org.opencontainers.image.source="https://github.com/yourusername/pg-replicate-kafka"
-LABEL org.opencontainers.image.licenses="MIT"
+LABEL org.opencontainers.image.licenses="MPL-2.0"

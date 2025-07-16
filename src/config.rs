@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+use std::env;
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Config {
@@ -17,61 +18,149 @@ pub struct PostgresConfig {
     pub password: String,
     pub publication: String,
     pub slot_name: String,
-    #[serde(default = "default_connect_timeout")]
     pub connect_timeout_secs: u64,
-    #[serde(default)]
     pub ssl_mode: SslMode,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, Default)]
-#[serde(rename_all = "lowercase")]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum SslMode {
-    #[default]
     Disable,
     Prefer,
     Require,
+}
+
+impl Default for SslMode {
+    fn default() -> Self {
+        SslMode::Disable
+    }
+}
+
+impl std::str::FromStr for SslMode {
+    type Err = String;
+    
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "disable" => Ok(SslMode::Disable),
+            "prefer" => Ok(SslMode::Prefer),
+            "require" => Ok(SslMode::Require),
+            _ => Err(format!("Invalid SSL mode: {}. Valid values: disable, prefer, require", s)),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct KafkaConfig {
     pub brokers: Vec<String>,
     pub topic_prefix: String,
-    #[serde(default = "default_compression")]
     pub compression: String,
-    #[serde(default = "default_acks")]
     pub acks: String,
-    #[serde(default = "default_linger_ms")]
     pub linger_ms: u32,
-    #[serde(default = "default_batch_size")]
     pub batch_size: usize,
-    #[serde(default = "default_buffer_memory")]
     pub buffer_memory: usize,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ReplicationConfig {
-    #[serde(default = "default_poll_interval_ms")]
     pub poll_interval_ms: u64,
-    #[serde(default = "default_keepalive_interval_secs")]
     pub keepalive_interval_secs: u64,
-    #[serde(default = "default_checkpoint_interval_secs")]
     pub checkpoint_interval_secs: u64,
-    #[serde(default = "default_max_buffer_size")]
+    pub checkpoint_file: Option<PathBuf>,
     pub max_buffer_size: usize,
 }
 
 impl Config {
-    pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self, config::ConfigError> {
-        let settings = config::Config::builder()
-            .add_source(config::File::from(path.as_ref()))
-            .add_source(
-                config::Environment::with_prefix("PG_REPLICATE")
-                    .prefix_separator("_")
-                    .separator("__"),
-            )
-            .build()?;
+    /// Load configuration from environment variables
+    pub fn from_env() -> Result<Self, String> {
+        // PostgreSQL config
+        let postgres = PostgresConfig {
+            host: env::var("PG_HOST")
+                .unwrap_or_else(|_| "localhost".to_string()),
+            port: env::var("PG_PORT")
+                .unwrap_or_else(|_| "5432".to_string())
+                .parse::<u16>()
+                .map_err(|_| "PG_PORT must be a valid port number")?,
+            database: env::var("PG_DATABASE")
+                .map_err(|_| "PG_DATABASE is required")?,
+            username: env::var("PG_USERNAME")
+                .map_err(|_| "PG_USERNAME is required")?,
+            password: env::var("PG_PASSWORD")
+                .map_err(|_| "PG_PASSWORD is required")?,
+            publication: env::var("PG_PUBLICATION")
+                .unwrap_or_else(|_| "pg_replicate_kafka_pub".to_string()),
+            slot_name: env::var("PG_SLOT_NAME")
+                .unwrap_or_else(|_| "pg_replicate_kafka_slot".to_string()),
+            connect_timeout_secs: env::var("PG_CONNECT_TIMEOUT_SECS")
+                .unwrap_or_else(|_| "30".to_string())
+                .parse::<u64>()
+                .unwrap_or(30),
+            ssl_mode: env::var("PG_SSL_MODE")
+                .unwrap_or_else(|_| "disable".to_string())
+                .parse::<SslMode>()
+                .map_err(|e| e)?,
+        };
+
+        // Kafka config
+        let brokers = env::var("KAFKA_BROKERS")
+            .map_err(|_| "KAFKA_BROKERS is required")?
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>();
         
-        settings.try_deserialize()
+        if brokers.is_empty() {
+            return Err("KAFKA_BROKERS must contain at least one broker".to_string());
+        }
+
+        let kafka = KafkaConfig {
+            brokers,
+            topic_prefix: env::var("KAFKA_TOPIC_PREFIX")
+                .unwrap_or_else(|_| "cdc".to_string()),
+            compression: env::var("KAFKA_COMPRESSION")
+                .unwrap_or_else(|_| "snappy".to_string()),
+            acks: env::var("KAFKA_ACKS")
+                .unwrap_or_else(|_| "all".to_string()),
+            linger_ms: env::var("KAFKA_LINGER_MS")
+                .unwrap_or_else(|_| "100".to_string())
+                .parse::<u32>()
+                .unwrap_or(100),
+            batch_size: env::var("KAFKA_BATCH_SIZE")
+                .unwrap_or_else(|_| "16384".to_string())
+                .parse::<usize>()
+                .unwrap_or(16384),
+            buffer_memory: env::var("KAFKA_BUFFER_MEMORY")
+                .unwrap_or_else(|_| "33554432".to_string())
+                .parse::<usize>()
+                .unwrap_or(33_554_432), // 32MB
+        };
+
+        // Replication config
+        let replication = ReplicationConfig {
+            poll_interval_ms: env::var("REPLICATION_POLL_INTERVAL_MS")
+                .unwrap_or_else(|_| "100".to_string())
+                .parse::<u64>()
+                .unwrap_or(100),
+            keepalive_interval_secs: env::var("REPLICATION_KEEPALIVE_INTERVAL_SECS")
+                .unwrap_or_else(|_| "10".to_string())
+                .parse::<u64>()
+                .unwrap_or(10),
+            checkpoint_interval_secs: env::var("REPLICATION_CHECKPOINT_INTERVAL_SECS")
+                .unwrap_or_else(|_| "10".to_string())
+                .parse::<u64>()
+                .unwrap_or(10),
+            checkpoint_file: env::var("REPLICATION_CHECKPOINT_FILE")
+                .ok()
+                .map(PathBuf::from),
+            max_buffer_size: env::var("REPLICATION_MAX_BUFFER_SIZE")
+                .unwrap_or_else(|_| "1000".to_string())
+                .parse::<usize>()
+                .unwrap_or(1000),
+        };
+
+        Ok(Config {
+            postgres,
+            kafka,
+            replication,
+        })
     }
     
     pub fn postgres_url(&self) -> String {
@@ -88,46 +177,6 @@ impl Config {
     pub fn kafka_topic_name(&self, table_name: &str) -> String {
         format!("{}.{}", self.kafka.topic_prefix, table_name)
     }
-}
-
-fn default_connect_timeout() -> u64 {
-    30
-}
-
-fn default_compression() -> String {
-    "snappy".to_string()
-}
-
-fn default_acks() -> String {
-    "all".to_string()
-}
-
-fn default_linger_ms() -> u32 {
-    100
-}
-
-fn default_batch_size() -> usize {
-    16384
-}
-
-fn default_buffer_memory() -> usize {
-    33_554_432 // 32MB
-}
-
-fn default_poll_interval_ms() -> u64 {
-    100
-}
-
-fn default_keepalive_interval_secs() -> u64 {
-    10
-}
-
-fn default_checkpoint_interval_secs() -> u64 {
-    10
-}
-
-fn default_max_buffer_size() -> usize {
-    1000
 }
 
 impl KafkaConfig {
