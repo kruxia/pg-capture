@@ -1,0 +1,25 @@
+[postgres]
+host = "localhost"
+port = 5432
+database = "mydb"
+username = "replicator"
+password = "secret"
+publication = "my_publication"
+slot_name = "pg_replicate_kafka_slot"
+connect_timeout_secs = 30
+ssl_mode = "prefer"
+
+[kafka]
+brokers = ["localhost:9092"]
+topic_prefix = "cdc"
+compression = "snappy"
+acks = "all"
+linger_ms = 100
+batch_size = 16384
+buffer_memory = 33554432
+
+[replication]
+poll_interval_ms = 100
+keepalive_interval_secs = 10
+checkpoint_interval_secs = 10
+max_buffer_size = 1000

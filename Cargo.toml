@@ -1,0 +1,35 @@
+[package]
+name = "pg-replicate-kafka"
+version = "0.1.0"
+edition = "2021"
+authors = ["pg-replicate-kafka contributors"]
+description = "PostgreSQL to Kafka CDC replicator using logical replication"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/yourusername/pg-replicate-kafka"
+keywords = ["postgresql", "kafka", "cdc", "replication", "streaming"]
+categories = ["database"]
+
+[dependencies]
+tokio = { version = "1.40", features = ["full"] }
+tokio-postgres = { version = "0.7", features = ["runtime", "with-chrono-0_4"] }
+rdkafka = { version = "0.36", features = ["tokio"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+config = "0.14"
+thiserror = "1.0"
+clap = { version = "4.5", features = ["derive"] }
+chrono = { version = "0.4", features = ["serde"] }
+bytes = "1.8"
+futures = "0.3"
+anyhow = "1.0"
+
+[dev-dependencies]
+tempfile = "3.10"
+testcontainers = "0.23"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
