@@ -1,5 +1,5 @@
 use clap::Parser;
-use pg_replicate_kafka::{Config, Error, Result};
+use pg_replicate_kafka::{Config, Error, Result, Replicator};
 use std::path::PathBuf;
 use tracing::{error, info};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
@@ -7,6 +7,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilte
 #[derive(Parser, Debug)]
 #[command(name = "pg-replicate-kafka")]
 #[command(about = "PostgreSQL to Kafka CDC replicator", long_about = None)]
+#[command(version)]
 struct Args {
     #[arg(short, long, value_name = "FILE", default_value = "config.toml")]
     config: PathBuf,
@@ -24,7 +25,7 @@ async fn main() -> Result<()> {
     
     init_logging(args.json_logs, args.verbose);
     
-    info!("Starting pg-replicate-kafka");
+    info!("Starting pg-replicate-kafka v{}", env!("CARGO_PKG_VERSION"));
     info!("Loading configuration from {:?}", args.config);
     
     let config = match Config::from_file(&args.config) {
@@ -50,10 +51,19 @@ async fn main() -> Result<()> {
     
     info!("Starting replication from PostgreSQL to Kafka");
     
-    // TODO: Implement replicator
-    error!("Replicator not yet implemented");
+    // Create and run the replicator
+    let mut replicator = Replicator::new(config);
     
-    Ok(())
+    match replicator.run().await {
+        Ok(()) => {
+            info!("Replication completed successfully");
+            Ok(())
+        }
+        Err(e) => {
+            error!("Replication failed: {}", e);
+            Err(e)
+        }
+    }
 }
 
 fn init_logging(json: bool, verbose: bool) {
