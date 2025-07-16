@@ -17,8 +17,14 @@ pub enum Error {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
     
-    #[error("Connection error: {message}")]
-    Connection { message: String },
+    #[error("Connection error: {0}")]
+    Connection(String),
+    
+    #[error("Authentication error: {0}")]
+    Authentication(String),
+    
+    #[error("Protocol error: {0}")]
+    Protocol(String),
     
     #[error("Replication error: {message}")]
     Replication { message: String },

@@ -12,6 +12,8 @@ categories = ["database"]
 [dependencies]
 tokio = { version = "1.40", features = ["full"] }
 tokio-postgres = { version = "0.7", features = ["runtime", "with-chrono-0_4"] }
+postgres-protocol = "0.6"
+tokio-stream = "0.1"
 rdkafka = { version = "0.36", features = ["tokio"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -25,10 +27,15 @@ bytes = "1.8"
 base64 = "0.22"
 futures = "0.3"
 anyhow = "1.0"
+fallible-iterator = "0.2"
 
 [dev-dependencies]
 tempfile = "3.10"
 testcontainers = "0.23"
+
+[[example]]
+name = "test_copyboth"
+path = "examples/test_copyboth.rs"
 
 [profile.release]
 lto = true
