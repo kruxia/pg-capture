@@ -1,6 +1,7 @@
 pub mod config;
 pub mod error;
 pub mod replicator;
+pub mod checkpoint;
 
 pub mod postgres;
 pub mod kafka;

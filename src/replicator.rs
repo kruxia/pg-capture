@@ -1,6 +1,7 @@
 use crate::{Config, Result, Error};
-use crate::postgres::{ReplicationConnection, DecodedMessage, PgOutputDecoder};
+use crate::postgres::{ReplicationConnection, DecodedMessage, PgOutputDecoder, ReplicationMessage};
 use crate::kafka::{KafkaProducer, JsonSerializer, KeyStrategy, SerializationFormat, TopicManager};
+use crate::checkpoint::{Checkpoint, CheckpointManager};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
@@ -14,10 +15,16 @@ pub struct Replicator {
     topic_manager: Option<TopicManager>,
     shutdown_receiver: Option<mpsc::Receiver<()>>,
     decoder: Option<PgOutputDecoder>,
+    checkpoint_manager: CheckpointManager,
+    current_lsn: Option<u64>,
+    total_message_count: u64,
 }
 
 impl Replicator {
     pub fn new(config: Config) -> Self {
+        // Default checkpoint path if not specified
+        let checkpoint_path = std::path::Path::new("checkpoint.json");
+        
         Self { 
             config,
             postgres_conn: None,
@@ -25,6 +32,9 @@ impl Replicator {
             topic_manager: None,
             shutdown_receiver: None,
             decoder: None,
+            checkpoint_manager: CheckpointManager::new(checkpoint_path),
+            current_lsn: None,
+            total_message_count: 0,
         }
     }
     
@@ -43,24 +53,52 @@ impl Replicator {
             let _ = shutdown_tx.send(()).await;
         });
         
+        // Run with retry logic
+        let mut retry_count = 0;
+        let max_retries = 5;
+        let base_delay = Duration::from_secs(1);
+        
+        loop {
+            match self.run_with_retry().await {
+                Ok(()) => {
+                    info!("Replication completed successfully");
+                    return Ok(());
+                }
+                Err(Error::Shutdown) => {
+                    info!("Replication stopped due to shutdown signal");
+                    return Ok(());
+                }
+                Err(e) => {
+                    retry_count += 1;
+                    
+                    if retry_count > max_retries {
+                        error!("Maximum retries ({}) exceeded, giving up", max_retries);
+                        return Err(e);
+                    }
+                    
+                    // Exponential backoff: 1s, 2s, 4s, 8s, 16s
+                    let delay = base_delay * 2u32.pow(retry_count.min(4) - 1);
+                    error!("Replication failed: {}. Retrying in {:?} (attempt {}/{})", 
+                           e, delay, retry_count, max_retries);
+                    
+                    tokio::time::sleep(delay).await;
+                    
+                    // Reset connections for retry
+                    self.postgres_conn = None;
+                    self.kafka_producer = None;
+                    self.topic_manager = None;
+                    self.decoder = None;
+                }
+            }
+        }
+    }
+    
+    async fn run_with_retry(&mut self) -> Result<()> {
         // Initialize connections
         self.initialize_connections().await?;
         
         // Run the main replication loop
-        match self.replication_loop().await {
-            Ok(()) => {
-                info!("Replication completed successfully");
-                Ok(())
-            }
-            Err(Error::Shutdown) => {
-                info!("Replication stopped due to shutdown signal");
-                Ok(())
-            }
-            Err(e) => {
-                error!("Replication failed: {}", e);
-                Err(e)
-            }
-        }
+        self.replication_loop().await
     }
     
     async fn initialize_connections(&mut self) -> Result<()> {
@@ -129,9 +167,23 @@ impl Replicator {
         let decoder = self.decoder.as_mut()
             .ok_or_else(|| Error::Connection("Decoder not initialized".to_string()))?;
         
+        // Load checkpoint if it exists
+        let start_lsn = match self.checkpoint_manager.load().await? {
+            Some(checkpoint) => {
+                info!("Resuming from checkpoint: LSN={}, messages={}", 
+                      checkpoint.lsn, checkpoint.message_count);
+                self.total_message_count = checkpoint.message_count;
+                Some(checkpoint.lsn)
+            }
+            None => {
+                info!("No checkpoint found, starting from beginning");
+                None
+            }
+        };
+        
         // Start replication
         info!("Starting replication");
-        pg_conn.start_replication(None).await?;
+        pg_conn.start_replication(start_lsn).await?;
         
         // Create serializer and key strategy
         let serializer = JsonSerializer::new(SerializationFormat::Json);
@@ -158,6 +210,14 @@ impl Replicator {
                 ) => {
                     match result {
                         Ok(Ok(Some(message))) => {
+                            // Update current LSN
+                            self.current_lsn = Some(message.wal_end);
+                            
+                            // Send standby status update to keep connection alive
+                            if let Err(e) = pg_conn.send_standby_status_update(message.wal_end).await {
+                                warn!("Failed to send standby status update: {}", e);
+                            }
+                            
                             // Decode the replication message
                             match decoder.decode(&message.data) {
                                 Ok(Some(decoded_msg)) => {
@@ -170,14 +230,26 @@ impl Replicator {
                                         &key_strategy
                                     ).await {
                                         error!("Failed to process message: {}", e);
+                                        
                                         // Decide whether to continue or fail based on error type
-                                        if matches!(e, Error::Kafka(_)) {
-                                            // Kafka errors might be recoverable
-                                            warn!("Continuing after Kafka error");
-                                        } else {
-                                            return Err(e);
+                                        match &e {
+                                            Error::Kafka(_) => {
+                                                // Kafka errors might be recoverable
+                                                warn!("Continuing after Kafka error - will retry on next message");
+                                            }
+                                            Error::Serialization(_) => {
+                                                // Skip messages that can't be serialized
+                                                warn!("Skipping message due to serialization error");
+                                            }
+                                            _ => {
+                                                // Other errors are fatal
+                                                return Err(e);
+                                            }
                                         }
                                     }
+                                    
+                                    message_count += 1;
+                                    self.total_message_count += 1;
                                 }
                                 Ok(None) => {
                                     // Message was not relevant or was a keepalive
@@ -188,11 +260,25 @@ impl Replicator {
                                 }
                             }
                             
-                            message_count += 1;
-                            
                             // Periodic checkpoint
                             if last_checkpoint.elapsed() > Duration::from_secs(self.config.replication.checkpoint_interval_secs) {
                                 info!("Processed {} messages since last checkpoint", message_count);
+                                
+                                // Save checkpoint
+                                if let Some(lsn) = self.current_lsn {
+                                    let checkpoint = Checkpoint::new(
+                                        ReplicationMessage::format_lsn(lsn),
+                                        self.total_message_count
+                                    );
+                                    
+                                    if let Err(e) = self.checkpoint_manager.save(&checkpoint).await {
+                                        error!("Failed to save checkpoint: {}", e);
+                                    } else {
+                                        info!("Checkpoint saved: LSN={}, total_messages={}", 
+                                              checkpoint.lsn, checkpoint.message_count);
+                                    }
+                                }
+                                
                                 message_count = 0;
                                 last_checkpoint = std::time::Instant::now();
                                 
@@ -223,6 +309,21 @@ impl Replicator {
         // Flush any pending Kafka messages
         if let Err(e) = kafka_producer.flush(Duration::from_secs(10)).await {
             warn!("Failed to flush Kafka producer during shutdown: {}", e);
+        }
+        
+        // Save final checkpoint
+        if let Some(lsn) = self.current_lsn {
+            let checkpoint = Checkpoint::new(
+                ReplicationMessage::format_lsn(lsn),
+                self.total_message_count
+            );
+            
+            if let Err(e) = self.checkpoint_manager.save(&checkpoint).await {
+                error!("Failed to save final checkpoint: {}", e);
+            } else {
+                info!("Final checkpoint saved: LSN={}, total_messages={}", 
+                      checkpoint.lsn, checkpoint.message_count);
+            }
         }
         
         Err(Error::Shutdown)

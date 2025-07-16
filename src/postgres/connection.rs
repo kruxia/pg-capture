@@ -402,6 +402,8 @@ impl ReplicationConnection {
                                 return Ok(Some(ReplicationMessage {
                                     data,
                                     timestamp: SystemTime::now(), // Convert from PostgreSQL timestamp if needed
+                                    wal_start,
+                                    wal_end,
                                 }));
                             }
                             CopyBothMessage::PrimaryKeepalive { wal_end, timestamp, reply_requested } => {
@@ -494,7 +496,7 @@ impl ReplicationConnection {
         }
     }
     
-    async fn send_standby_status_update(&mut self, lsn: u64) -> Result<()> {
+    pub async fn send_standby_status_update(&mut self, lsn: u64) -> Result<()> {
         if !self.replication_started {
             return Err(Error::Replication {
                 message: "No active replication stream".to_string(),
@@ -612,6 +614,22 @@ pub struct SystemInfo {
 pub struct ReplicationMessage {
     pub data: Bytes,
     pub timestamp: SystemTime,
+    pub wal_start: u64,
+    pub wal_end: u64,
+}
+
+impl ReplicationMessage {
+    pub fn format_lsn(lsn: u64) -> String {
+        format!("{:X}/{:X}", lsn >> 32, lsn & 0xFFFFFFFF)
+    }
+    
+    pub fn wal_start_str(&self) -> String {
+        Self::format_lsn(self.wal_start)
+    }
+    
+    pub fn wal_end_str(&self) -> String {
+        Self::format_lsn(self.wal_end)
+    }
 }
 
 
