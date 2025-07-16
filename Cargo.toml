@@ -4,10 +4,20 @@ version = "0.1.0"
 edition = "2021"
 authors = ["pg-replicate-kafka contributors"]
 description = "PostgreSQL to Kafka CDC replicator using logical replication"
-license = "MIT OR Apache-2.0"
+license = "MIT"
 repository = "https://github.com/yourusername/pg-replicate-kafka"
+homepage = "https://github.com/yourusername/pg-replicate-kafka"
+documentation = "https://github.com/yourusername/pg-replicate-kafka#readme"
+readme = "README.md"
 keywords = ["postgresql", "kafka", "cdc", "replication", "streaming"]
-categories = ["database"]
+categories = ["database", "command-line-utilities"]
+exclude = [
+    ".github/",
+    "tests/",
+    "scripts/",
+    "docker-compose.yml",
+    ".dockerignore"
+]
 
 [dependencies]
 tokio = { version = "1.40", features = ["full"] }

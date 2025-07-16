@@ -1,0 +1,41 @@
+# Example configuration with environment variable placeholders
+# pg-replicate-kafka supports environment variable expansion
+#
+# Environment variables can override any setting using the format:
+# PG_REPLICATE_KAFKA_<SECTION>_<KEY>
+#
+# Examples:
+# - PG_REPLICATE_KAFKA_POSTGRES_HOST=db.example.com
+# - PG_REPLICATE_KAFKA_POSTGRES_PASSWORD=secret123
+# - PG_REPLICATE_KAFKA_KAFKA_BROKERS=broker1:9092,broker2:9092
+# - PG_REPLICATE_KAFKA_REPLICATION_CHECKPOINT_FILE=/data/checkpoint.json
+
+[postgres]
+# Connection settings - can be overridden by env vars
+host = "${PG_HOST:-localhost}"
+port = "${PG_PORT:-5432}"
+database = "${PG_DATABASE:-postgres}"
+username = "${PG_USERNAME:-postgres}"
+password = "${PG_PASSWORD:-postgres}"  # Always use env var in production!
+publication = "${PG_PUBLICATION:-my_publication}"
+slot_name = "${PG_SLOT_NAME:-pg_replicate_kafka_slot}"
+
+[kafka]
+# Kafka settings - brokers can be comma-separated in env var
+brokers = ["${KAFKA_BROKERS:-localhost:9092}"]
+topic_prefix = "${KAFKA_TOPIC_PREFIX:-cdc}"
+compression = "${KAFKA_COMPRESSION:-snappy}"
+acks = "${KAFKA_ACKS:-all}"
+
+[replication]
+# Performance tuning
+poll_interval_ms = "${REPLICATION_POLL_INTERVAL_MS:-100}"
+keepalive_interval_secs = "${REPLICATION_KEEPALIVE_INTERVAL_SECS:-10}"
+checkpoint_interval_secs = "${REPLICATION_CHECKPOINT_INTERVAL_SECS:-10}"
+checkpoint_file = "${REPLICATION_CHECKPOINT_FILE:-/var/lib/pg-replicate-kafka/checkpoint.json}"
+
+# Example usage:
+# export PG_PASSWORD="my-secret-password"
+# export KAFKA_BROKERS="kafka1:9092,kafka2:9092,kafka3:9092"
+# export KAFKA_COMPRESSION="zstd"
+# pg-replicate-kafka --config example-with-env.toml

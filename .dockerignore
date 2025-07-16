@@ -1,0 +1,38 @@
+# Ignore build artifacts
+target/
+Dockerfile
+.dockerignore
+
+# Ignore git files
+.git/
+.gitignore
+
+# Ignore development files
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Ignore test files
+tests/
+examples/
+
+# Ignore documentation
+docs/
+*.md
+
+# Ignore CI/CD
+.github/
+.gitlab-ci.yml
+
+# Ignore IDE files
+.idea/
+.vscode/
+*.iml
+
+# Ignore local config
+config/*.toml
+!config/example.toml
+
+# Ignore checkpoints
+*.checkpoint

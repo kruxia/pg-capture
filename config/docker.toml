@@ -1,0 +1,23 @@
+# Configuration for Docker Compose deployment
+# This file is used by the docker-compose.yml setup
+
+[postgres]
+host = "postgres"  # Docker service name
+port = 5432
+database = "testdb"
+username = "postgres"
+password = "postgres"
+publication = "my_publication"
+slot_name = "pg_replicate_kafka_slot"
+
+[kafka]
+brokers = ["kafka:9092"]  # Docker service name
+topic_prefix = "cdc"
+compression = "snappy"
+acks = "all"
+
+[replication]
+poll_interval_ms = 100
+keepalive_interval_secs = 10
+checkpoint_interval_secs = 10
+checkpoint_file = "/var/lib/pg-replicate-kafka/checkpoint.json"

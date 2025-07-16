@@ -1,0 +1,218 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  RUST_VERSION: "1.75"
+  CARGO_TERM_COLOR: always
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          override: true
+          components: rustfmt, clippy
+      
+      - name: Cache cargo registry
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Cache cargo index
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Cache cargo build
+        uses: actions/cache@v3
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Check formatting
+        run: cargo fmt -- --check
+      
+      - name: Run clippy
+        run: cargo clippy -- -D warnings
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          override: true
+      
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Run unit tests
+        run: cargo test --lib --bins
+      
+      - name: Run doc tests
+        run: cargo test --doc
+
+  integration-test:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: testdb
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          override: true
+      
+      - name: Start Kafka
+        run: |
+          docker run -d \
+            --name kafka \
+            -p 9092:9092 \
+            -e KAFKA_CFG_NODE_ID=0 \
+            -e KAFKA_CFG_PROCESS_ROLES=controller,broker \
+            -e KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093 \
+            -e KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \
+            -e KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092 \
+            -e KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
+            -e KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+            -e KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
+            bitnami/kafka:3.6
+      
+      - name: Wait for Kafka
+        run: |
+          timeout 60 bash -c 'until docker exec kafka kafka-topics.sh --bootstrap-server localhost:9092 --list; do sleep 2; done'
+      
+      - name: Configure PostgreSQL
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -d testdb -c "ALTER SYSTEM SET wal_level = logical;"
+          docker restart $(docker ps -q --filter ancestor=postgres:16)
+          sleep 5
+      
+      - name: Run integration tests
+        run: |
+          export RUST_LOG=pg_replicate_kafka=debug
+          cargo test --test integration_test -- --ignored --test-threads=1
+          cargo test --test checkpoint_test
+
+  build:
+    name: Build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: macos-latest
+            target: x86_64-apple-darwin
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          target: ${{ matrix.target }}
+          override: true
+      
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Build release binary
+        run: cargo build --release --target ${{ matrix.target }}
+      
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: pg-replicate-kafka-${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/pg-replicate-kafka
+
+  docker:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: pg-replicate-kafka:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      - name: Test Docker image
+        run: |
+          docker run --rm pg-replicate-kafka:test --version
+          docker run --rm pg-replicate-kafka:test --help
+      
+      - name: Check image size
+        run: |
+          IMAGE_SIZE=$(docker image inspect pg-replicate-kafka:test --format='{{.Size}}')
+          IMAGE_SIZE_MB=$((IMAGE_SIZE / 1024 / 1024))
+          echo "Image size: ${IMAGE_SIZE_MB}MB"
+          if [ $IMAGE_SIZE_MB -gt 50 ]; then
+            echo "ERROR: Docker image exceeds 50MB limit (${IMAGE_SIZE_MB}MB)"
+            exit 1
+          fi
+
+  security:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Run security audit
+        uses: actions-rs/audit-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}

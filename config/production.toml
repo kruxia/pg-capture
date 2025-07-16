@@ -1,0 +1,69 @@
+# Production configuration template
+# Copy and modify this file for your production environment
+
+[postgres]
+# PostgreSQL connection settings
+host = "postgres.example.com"
+port = 5432
+database = "production_db"
+username = "replicator"
+password = "CHANGE_ME"  # Use environment variable in production
+publication = "production_publication"
+slot_name = "pg_replicate_kafka_prod"
+
+[kafka]
+# Kafka cluster configuration
+brokers = [
+    "kafka1.example.com:9092",
+    "kafka2.example.com:9092",
+    "kafka3.example.com:9092"
+]
+topic_prefix = "cdc"
+compression = "zstd"  # Best compression ratio
+acks = "all"  # Ensure durability
+
+# Additional Kafka settings (optional)
+# These map to rdkafka producer configuration
+# See: https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
+[kafka.producer_config]
+"compression.type" = "zstd"
+"batch.size" = "100000"
+"linger.ms" = "10"
+"buffer.memory" = "67108864"  # 64MB
+"max.in.flight.requests.per.connection" = "5"
+"retries" = "10"
+"retry.backoff.ms" = "100"
+"request.timeout.ms" = "30000"
+"delivery.timeout.ms" = "120000"
+
+[replication]
+# Replication tuning
+poll_interval_ms = 50  # Lower for reduced latency
+keepalive_interval_secs = 10
+checkpoint_interval_secs = 30  # Less frequent for better throughput
+checkpoint_file = "/var/lib/pg-replicate-kafka/checkpoint.json"
+
+# Logging configuration (optional)
+[logging]
+level = "info"  # error, warn, info, debug, trace
+format = "json"  # plain or json for structured logging
+
+# TLS/SSL configuration (optional)
+[postgres.ssl]
+enabled = true
+ca_cert = "/etc/ssl/certs/postgres-ca.crt"
+client_cert = "/etc/ssl/certs/postgres-client.crt"
+client_key = "/etc/ssl/private/postgres-client.key"
+
+[kafka.ssl]
+enabled = true
+ca_cert = "/etc/ssl/certs/kafka-ca.crt"
+client_cert = "/etc/ssl/certs/kafka-client.crt"
+client_key = "/etc/ssl/private/kafka-client.key"
+
+# SASL authentication for Kafka (optional)
+[kafka.sasl]
+enabled = true
+mechanism = "SCRAM-SHA-512"  # PLAIN, SCRAM-SHA-256, SCRAM-SHA-512
+username = "kafka-user"
+password = "CHANGE_ME"  # Use environment variable

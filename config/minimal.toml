@@ -1,0 +1,15 @@
+# Minimal configuration example
+# Only required settings - all others use defaults
+
+[postgres]
+host = "localhost"
+port = 5432
+database = "mydb"
+username = "replicator"
+password = "secret"
+publication = "my_publication"
+slot_name = "pg_replicate_kafka_slot"
+
+[kafka]
+brokers = ["localhost:9092"]
+topic_prefix = "cdc"

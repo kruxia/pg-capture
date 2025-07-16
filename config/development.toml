@@ -1,0 +1,32 @@
+# Development configuration
+# Optimized for local development and debugging
+
+[postgres]
+host = "localhost"
+port = 5432
+database = "dev_db"
+username = "postgres"
+password = "postgres"
+publication = "dev_publication"
+slot_name = "pg_replicate_kafka_dev"
+
+[kafka]
+brokers = ["localhost:9092"]
+topic_prefix = "dev_cdc"
+# No compression for easier debugging
+compression = "none"
+# Faster feedback during development
+acks = "1"
+
+[replication]
+# Aggressive polling for immediate feedback
+poll_interval_ms = 10
+keepalive_interval_secs = 10
+# Frequent checkpoints for testing recovery
+checkpoint_interval_secs = 5
+checkpoint_file = "./checkpoint_dev.json"
+
+[logging]
+# Verbose logging for development
+level = "debug"
+format = "plain"  # Human-readable format
