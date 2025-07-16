@@ -1,8 +1,8 @@
-# Product Requirements Document: pg-replicate-kafka
+# Product Requirements Document: pg-capture
 
 ## Executive Summary
 
-pg-replicate-kafka is a high-performance Change Data Capture (CDC) solution that streams PostgreSQL database changes to Apache Kafka in real-time. Built in Rust for reliability and performance, it enables organizations to build event-driven architectures, maintain data synchronization across systems, and implement audit trails with minimal impact on source databases.
+pg-capture is a high-performance Change Data Capture (CDC) solution that streams PostgreSQL database changes to Apache Kafka in real-time. Built in Rust for reliability and performance, it enables organizations to build event-driven architectures, maintain data synchronization across systems, and implement audit trails with minimal impact on source databases.
 
 ## Problem Statement
 
@@ -21,7 +21,7 @@ Current solutions often suffer from:
 
 ## Solution Overview
 
-pg-replicate-kafka provides a lightweight, reliable bridge between PostgreSQL's logical replication protocol and Apache Kafka, enabling:
+pg-capture provides a lightweight, reliable bridge between PostgreSQL's logical replication protocol and Apache Kafka, enabling:
 - Real-time streaming of INSERT, UPDATE, DELETE operations
 - Exactly-once delivery semantics with configurable guarantees
 - Automatic schema evolution handling
@@ -112,7 +112,7 @@ pg-replicate-kafka provides a lightweight, reliable bridge between PostgreSQL's 
 ## User Workflows
 
 ### Initial Setup
-1. Install pg-replicate-kafka via package manager or Docker
+1. Install pg-capture via package manager or Docker
 2. Configure PostgreSQL for logical replication
 3. Create configuration file with connection details
 4. Start the replicator with monitoring enabled

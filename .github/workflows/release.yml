@@ -52,20 +52,20 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            binary_name: pg-replicate-kafka
-            asset_name: pg-replicate-kafka-linux-amd64
+            binary_name: pg-capture
+            asset_name: pg-capture-linux-amd64
           - os: ubuntu-latest
             target: x86_64-unknown-linux-musl
-            binary_name: pg-replicate-kafka
-            asset_name: pg-replicate-kafka-linux-amd64-musl
+            binary_name: pg-capture
+            asset_name: pg-capture-linux-amd64-musl
           - os: macos-latest
             target: x86_64-apple-darwin
-            binary_name: pg-replicate-kafka
-            asset_name: pg-replicate-kafka-darwin-amd64
+            binary_name: pg-capture
+            asset_name: pg-capture-darwin-amd64
           - os: macos-latest
             target: aarch64-apple-darwin
-            binary_name: pg-replicate-kafka
-            asset_name: pg-replicate-kafka-darwin-arm64
+            binary_name: pg-capture
+            asset_name: pg-capture-darwin-arm64
     
     steps:
       - uses: actions/checkout@v4

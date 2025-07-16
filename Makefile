@@ -6,7 +6,7 @@ help:
 	@echo "  make build          - Build the project"
 	@echo "  make test           - Run unit tests"
 	@echo "  make test-integration - Run integration tests with Docker"
-	@echo "  make run            - Run pg-replicate-kafka (requires env vars)"
+	@echo "  make run            - Run pg-capture (requires env vars)"
 	@echo "  make dev            - Start development environment with Docker Compose"
 	@echo "  make docker-build   - Build Docker image"
 	@echo "  make clean          - Clean build artifacts"
@@ -25,7 +25,7 @@ test:
 test-integration:
 	docker-compose -f docker-compose.test.yml up --build --abort-on-container-exit --exit-code-from test-runner
 
-# Run pg-replicate-kafka (requires environment variables)
+# Run pg-capture (requires environment variables)
 run:
 	@if [ -z "$$PG_DATABASE" ] || [ -z "$$PG_USERNAME" ] || [ -z "$$PG_PASSWORD" ] || [ -z "$$KAFKA_BROKERS" ]; then \
 		echo "Error: Required environment variables not set"; \
@@ -43,12 +43,12 @@ dev:
 	@echo "  Kafka: localhost:9092"
 	@echo "  Kafka UI: http://localhost:8080"
 	@echo ""
-	@echo "To start pg-replicate-kafka:"
+	@echo "To start pg-capture:"
 	@echo "  docker-compose --profile app up -d"
 
 # Build Docker image
 docker-build:
-	docker build -t pg-replicate-kafka:latest .
+	docker build -t pg-capture:latest .
 
 # Run with Docker
 docker-run:
@@ -64,8 +64,8 @@ docker-run:
 		-e KAFKA_BROKERS \
 		-e PG_HOST=$${PG_HOST:-localhost} \
 		-e KAFKA_TOPIC_PREFIX=$${KAFKA_TOPIC_PREFIX:-cdc} \
-		-v pg-replicate-kafka-data:/var/lib/pg-replicate-kafka \
-		pg-replicate-kafka:latest
+		-v pg-capture-data:/var/lib/pg-capture \
+		pg-capture:latest
 
 # Clean build artifacts
 clean:

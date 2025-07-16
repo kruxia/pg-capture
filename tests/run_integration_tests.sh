@@ -1,9 +1,9 @@
 #!/bin/bash
-# Script to run integration tests for pg-replicate-kafka
+# Script to run integration tests for pg-capture
 
 set -e
 
-echo "=== pg-replicate-kafka Integration Test Suite ==="
+echo "=== pg-capture Integration Test Suite ==="
 echo "================================================"
 echo ""
 echo "Prerequisites:"

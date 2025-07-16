@@ -1,4 +1,4 @@
--- Initialize database for pg-replicate-kafka development
+-- Initialize database for pg-capture development
 
 -- Create example tables
 CREATE TABLE IF NOT EXISTS users (

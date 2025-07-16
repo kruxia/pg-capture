@@ -47,8 +47,8 @@ services:
       timeout: 10s
       retries: 5
 
-  # pg-replicate-kafka for local development
-  pg-replicate-kafka:
+  # pg-capture for local development
+  pg-capture:
     build:
       context: .
       dockerfile: Dockerfile
@@ -58,7 +58,7 @@ services:
       kafka:
         condition: service_healthy
     volumes:
-      - checkpoint_data:/var/lib/pg-replicate-kafka
+      - checkpoint_data:/var/lib/pg-capture
     environment:
       # PostgreSQL configuration
       PG_HOST: postgres
@@ -79,7 +79,7 @@ services:
       REPLICATION_POLL_INTERVAL_MS: 100
       REPLICATION_KEEPALIVE_INTERVAL_SECS: 10
       REPLICATION_CHECKPOINT_INTERVAL_SECS: 10
-      REPLICATION_CHECKPOINT_FILE: /var/lib/pg-replicate-kafka/checkpoint.json
+      REPLICATION_CHECKPOINT_FILE: /var/lib/pg-capture/checkpoint.json
       
       # Logging
       RUST_LOG: pg_replicate_kafka=info

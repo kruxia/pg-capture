@@ -1,4 +1,4 @@
-# pg-replicate-kafka environment configuration
+# pg-capture environment configuration
 # Copy this file to .envrc and update with your values
 # Use direnv to automatically load these variables: https://direnv.net/
 

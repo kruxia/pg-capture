@@ -1,6 +1,6 @@
 # Integration Test Suite
 
-This directory contains comprehensive integration tests for pg-replicate-kafka. The tests verify end-to-end functionality, failure scenarios, performance characteristics, and exactly-once semantics.
+This directory contains comprehensive integration tests for pg-capture. The tests verify end-to-end functionality, failure scenarios, performance characteristics, and exactly-once semantics.
 
 ## Test Categories
 
@@ -82,7 +82,7 @@ Each test:
 
 ## Performance Baselines
 
-Based on the performance tests, pg-replicate-kafka should achieve:
+Based on the performance tests, pg-capture should achieve:
 - **Throughput**: >1,000 messages/second
 - **Latency**: <500ms end-to-end
 - **Memory**: <256MB under sustained load

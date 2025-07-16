@@ -1,6 +1,6 @@
-# Contributing to pg-replicate-kafka
+# Contributing to pg-capture
 
-Thank you for your interest in contributing to pg-replicate-kafka! This document provides guidelines and instructions for contributing.
+Thank you for your interest in contributing to pg-capture! This document provides guidelines and instructions for contributing.
 
 ## Code of Conduct
 
@@ -14,7 +14,7 @@ By participating in this project, you agree to abide by our Code of Conduct:
 
 ### Reporting Issues
 
-1. Check if the issue already exists in the [issue tracker](https://github.com/yourusername/pg-replicate-kafka/issues)
+1. Check if the issue already exists in the [issue tracker](https://github.com/yourusername/pg-capture/issues)
 2. If not, create a new issue with:
    - Clear, descriptive title
    - Detailed description of the problem
@@ -25,7 +25,7 @@ By participating in this project, you agree to abide by our Code of Conduct:
 
 ### Suggesting Features
 
-1. Check the [issue tracker](https://github.com/yourusername/pg-replicate-kafka/issues) for existing feature requests
+1. Check the [issue tracker](https://github.com/yourusername/pg-capture/issues) for existing feature requests
 2. Open a new issue with the "enhancement" label
 3. Describe the feature and its use case
 4. Explain why this would be useful to other users
@@ -59,8 +59,8 @@ By participating in this project, you agree to abide by our Code of Conduct:
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/pg-replicate-kafka.git
-   cd pg-replicate-kafka
+   git clone https://github.com/yourusername/pg-capture.git
+   cd pg-capture
    ```
 
 2. Start test infrastructure:
@@ -85,7 +85,7 @@ By participating in this project, you agree to abide by our Code of Conduct:
 ### Project Structure
 
 ```
-pg-replicate-kafka/
+pg-capture/
 ├── src/
 │   ├── main.rs              # CLI entry point
 │   ├── lib.rs               # Library exports
@@ -206,8 +206,8 @@ Releases are automated via GitHub Actions when a tag is pushed:
 ## Getting Help
 
 - Join our [Discord server](https://discord.gg/example)
-- Check the [documentation](https://github.com/yourusername/pg-replicate-kafka/wiki)
-- Ask questions in [GitHub Discussions](https://github.com/yourusername/pg-replicate-kafka/discussions)
+- Check the [documentation](https://github.com/yourusername/pg-capture/wiki)
+- Ask questions in [GitHub Discussions](https://github.com/yourusername/pg-capture/discussions)
 
 ## License
 

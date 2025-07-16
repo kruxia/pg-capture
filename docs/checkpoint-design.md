@@ -2,7 +2,7 @@
 
 ## Overview
 
-The checkpoint system in pg-replicate-kafka provides persistent state management to ensure reliable replication and enable resumability after failures. This document describes the design and implementation of the checkpoint mechanism.
+The checkpoint system in pg-capture provides persistent state management to ensure reliable replication and enable resumability after failures. This document describes the design and implementation of the checkpoint mechanism.
 
 ## Goals
 

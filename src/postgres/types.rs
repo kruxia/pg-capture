@@ -36,7 +36,7 @@ impl SourceMetadata {
     pub fn new(db: String, schema: String, table: String, lsn: String) -> Self {
         Self {
             version: env!("CARGO_PKG_VERSION").to_string(),
-            connector: "pg-replicate-kafka".to_string(),
+            connector: "pg-capture".to_string(),
             ts_ms: Utc::now().timestamp_millis(),
             db,
             schema,

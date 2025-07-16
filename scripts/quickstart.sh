@@ -1,5 +1,5 @@
 #!/bin/bash
-# Quick start script for pg-replicate-kafka
+# Quick start script for pg-capture
 
 set -e
 
@@ -12,7 +12,7 @@ NC='\033[0m'
 
 echo -e "${BLUE}"
 echo "======================================"
-echo "   pg-replicate-kafka Quick Start     "
+echo "   pg-capture Quick Start     "
 echo "======================================"
 echo -e "${NC}"
 
@@ -78,12 +78,12 @@ EOF
 
 echo -e "${GREEN}✓ Database setup complete${NC}"
 
-# Build and start pg-replicate-kafka
-echo -e "${YELLOW}Building pg-replicate-kafka...${NC}"
-$DOCKER_COMPOSE build pg-replicate-kafka
+# Build and start pg-capture
+echo -e "${YELLOW}Building pg-capture...${NC}"
+$DOCKER_COMPOSE build pg-capture
 
-echo -e "${YELLOW}Starting pg-replicate-kafka...${NC}"
-$DOCKER_COMPOSE up -d pg-replicate-kafka
+echo -e "${YELLOW}Starting pg-capture...${NC}"
+$DOCKER_COMPOSE up -d pg-capture
 
 # Wait for replicator to be ready
 sleep 5
@@ -127,7 +127,7 @@ echo ""
 echo -e "${GREEN}✓ Quick start complete!${NC}"
 echo ""
 echo -e "${BLUE}Next steps:${NC}"
-echo "1. View logs: $DOCKER_COMPOSE logs -f pg-replicate-kafka"
+echo "1. View logs: $DOCKER_COMPOSE logs -f pg-capture"
 echo "2. Insert more data: $DOCKER_COMPOSE exec postgres psql -U postgres -d testdb"
 echo "3. Monitor Kafka: $DOCKER_COMPOSE --profile monitoring up -d kafka-ui"
 echo "   Then open http://localhost:8080"
@@ -139,5 +139,5 @@ echo "- Checkpoint: stored in Docker volume"
 echo ""
 echo -e "${YELLOW}Testing custom configuration:${NC}"
 echo "1. Edit environment variables in docker-compose.yml"
-echo "2. Restart: $DOCKER_COMPOSE restart pg-replicate-kafka"
+echo "2. Restart: $DOCKER_COMPOSE restart pg-capture"
 echo ""

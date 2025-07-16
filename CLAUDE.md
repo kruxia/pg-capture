@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-pg-replicate-kafka is a PostgreSQL logical replicator that publishes changes to Kafka topics. It's based on Supabase's pg_replicate (now called "etl") project. This is a Rust project currently in initial setup phase.
+pg-capture is a PostgreSQL logical replicator that publishes changes to Kafka topics. It's based on Supabase's pg_replicate (now called "etl") project. This is a Rust project currently in initial setup phase.
 
 ## Development Commands
 

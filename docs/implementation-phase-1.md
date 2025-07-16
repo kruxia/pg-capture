@@ -1,4 +1,4 @@
-# Phase 1 Implementation Plan: pg-replicate-kafka MVP
+# Phase 1 Implementation Plan: pg-capture MVP
 
 ## Overview
 
@@ -6,7 +6,7 @@ Phase 1 focuses on delivering a minimal viable product that can reliably replica
 
 ## Goals
 
-1. **Establish Core Pipeline**: PostgreSQL → pg-replicate-kafka → Kafka
+1. **Establish Core Pipeline**: PostgreSQL → pg-capture → Kafka
 2. **Prove Reliability**: Demonstrate stable replication with error recovery
 3. **Validate Performance**: Achieve reasonable throughput for single table
 4. **Create Foundation**: Build extensible architecture for future phases
@@ -36,7 +36,7 @@ Phase 1 focuses on delivering a minimal viable product that can reliably replica
 ### Component Structure
 
 ```
-pg-replicate-kafka/
+pg-capture/
 ├── Cargo.toml              # Dependencies and metadata
 ├── src/
 │   ├── main.rs            # CLI entry point
@@ -67,7 +67,7 @@ PostgreSQL Table
     ↓
 Logical Replication Slot (pgoutput)
     ↓
-[pg-replicate-kafka]
+[pg-capture]
     ├─→ Replication Connection
     ├─→ Message Decoder
     ├─→ JSON Serializer
@@ -219,7 +219,7 @@ checkpoint_interval_secs = 10
   },
   "source": {
     "version": "0.1.0",
-    "connector": "pg-replicate-kafka",
+    "connector": "pg-capture",
     "ts_ms": 1634567890100,
     "db": "mydb",
     "schema": "public",

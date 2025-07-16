@@ -1,5 +1,5 @@
 #!/bin/bash
-# Release script for pg-replicate-kafka
+# Release script for pg-capture
 
 set -e
 
@@ -9,7 +9,7 @@ RED='\033[0;31m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-echo "=== pg-replicate-kafka Release Script ==="
+echo "=== pg-capture Release Script ==="
 echo ""
 
 # Check if we're on main branch
@@ -55,7 +55,7 @@ sed -i.bak "s/^version = \".*\"/version = \"$NEW_VERSION\"/" Cargo.toml
 rm Cargo.toml.bak
 
 # Update version in Cargo.lock
-cargo update -p pg-replicate-kafka
+cargo update -p pg-capture
 
 # Update VERSION file
 echo "$NEW_VERSION" > VERSION
@@ -107,7 +107,7 @@ read -r response
 if [[ "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
     git push origin main --tags
     echo -e "${GREEN}✓ Release pushed to GitHub${NC}"
-    echo "Check https://github.com/yourusername/pg-replicate-kafka/actions for build status"
+    echo "Check https://github.com/yourusername/pg-capture/actions for build status"
 else
     echo "Release prepared but not pushed. To push later:"
     echo "  git push origin main --tags"

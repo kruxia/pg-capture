@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to pg-replicate-kafka will be documented in this file.
+All notable changes to pg-capture will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0] - 2024-01-XX
 
 ### Added
-- Initial release of pg-replicate-kafka
+- Initial release of pg-capture
 - PostgreSQL to Kafka CDC replication using logical replication
 - Support for INSERT, UPDATE, DELETE operations
 - JSON message format with before/after states
@@ -37,4 +37,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - No initial snapshot support (coming in v0.2.0)
 - No metrics endpoint (coming in v0.2.0)
 
-[0.1.0]: https://github.com/yourusername/pg-replicate-kafka/releases/tag/v0.1.0
+[0.1.0]: https://github.com/yourusername/pg-capture/releases/tag/v0.1.0

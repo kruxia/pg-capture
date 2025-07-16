@@ -170,8 +170,8 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v3
         with:
-          name: pg-replicate-kafka-${{ matrix.target }}
-          path: target/${{ matrix.target }}/release/pg-replicate-kafka
+          name: pg-capture-${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/pg-capture
 
   docker:
     name: Docker Build
@@ -187,18 +187,18 @@ jobs:
         with:
           context: .
           push: false
-          tags: pg-replicate-kafka:test
+          tags: pg-capture:test
           cache-from: type=gha
           cache-to: type=gha,mode=max
       
       - name: Test Docker image
         run: |
-          docker run --rm pg-replicate-kafka:test --version
-          docker run --rm pg-replicate-kafka:test --help
+          docker run --rm pg-capture:test --version
+          docker run --rm pg-capture:test --help
       
       - name: Check image size
         run: |
-          IMAGE_SIZE=$(docker image inspect pg-replicate-kafka:test --format='{{.Size}}')
+          IMAGE_SIZE=$(docker image inspect pg-capture:test --format='{{.Size}}')
           IMAGE_SIZE_MB=$((IMAGE_SIZE / 1024 / 1024))
           echo "Image size: ${IMAGE_SIZE_MB}MB"
           if [ $IMAGE_SIZE_MB -gt 50 ]; then

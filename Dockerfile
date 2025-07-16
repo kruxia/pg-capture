@@ -1,4 +1,4 @@
-# Multi-stage Dockerfile for pg-replicate-kafka
+# Multi-stage Dockerfile for pg-capture
 # Produces a minimal image under 50MB
 
 # Stage 1: Build
@@ -41,29 +41,29 @@ RUN addgroup -g 1000 pgrepkafka && \
     adduser -D -u 1000 -G pgrepkafka pgrepkafka
 
 # Copy binary from builder
-COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/pg-replicate-kafka /usr/local/bin/pg-replicate-kafka
+COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/pg-capture /usr/local/bin/pg-capture
 
 # Create checkpoint directory
-RUN mkdir -p /var/lib/pg-replicate-kafka && \
-    chown -R pgrepkafka:pgrepkafka /var/lib/pg-replicate-kafka
+RUN mkdir -p /var/lib/pg-capture && \
+    chown -R pgrepkafka:pgrepkafka /var/lib/pg-capture
 
 # Switch to non-root user
 USER pgrepkafka
 
 # Set working directory
-WORKDIR /var/lib/pg-replicate-kafka
+WORKDIR /var/lib/pg-capture
 
 # Expose metrics port (for future use)
 EXPOSE 9090
 
 # Default command
-ENTRYPOINT ["/usr/local/bin/pg-replicate-kafka"]
+ENTRYPOINT ["/usr/local/bin/pg-capture"]
 CMD ["--help"]
 
 # Labels
-LABEL org.opencontainers.image.title="pg-replicate-kafka"
+LABEL org.opencontainers.image.title="pg-capture"
 LABEL org.opencontainers.image.description="PostgreSQL to Kafka CDC replicator"
 LABEL org.opencontainers.image.version="0.1.0"
-LABEL org.opencontainers.image.authors="pg-replicate-kafka contributors"
-LABEL org.opencontainers.image.source="https://github.com/yourusername/pg-replicate-kafka"
+LABEL org.opencontainers.image.authors="pg-capture contributors"
+LABEL org.opencontainers.image.source="https://github.com/yourusername/pg-capture"
 LABEL org.opencontainers.image.licenses="MPL-2.0"

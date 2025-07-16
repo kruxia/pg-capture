@@ -1,4 +1,4 @@
-# pg-replicate-kafka
+# pg-capture
 
 A high-performance PostgreSQL logical replication tool that streams database changes to Apache Kafka topics in real-time. Based on Supabase's pg_replicate project.
 
@@ -22,10 +22,10 @@ A high-performance PostgreSQL logical replication tool that streams database cha
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/pg-replicate-kafka.git
-cd pg-replicate-kafka
+git clone https://github.com/yourusername/pg-capture.git
+cd pg-capture
 
-# Start PostgreSQL, Kafka, and pg-replicate-kafka
+# Start PostgreSQL, Kafka, and pg-capture
 docker-compose up -d
 
 # Create a test table and publication
@@ -71,7 +71,7 @@ export PG_HOST=localhost  # default: localhost
 export PG_PORT=5432       # default: 5432
 export KAFKA_TOPIC_PREFIX=cdc  # default: cdc
 
-pg-replicate-kafka
+pg-capture
 ```
 
 ### Using direnv for local development
@@ -89,7 +89,7 @@ direnv allow
 
 ## Configuration
 
-pg-replicate-kafka uses environment variables for configuration. See `.envrc.example` for all available options.
+pg-capture uses environment variables for configuration. See `.envrc.example` for all available options.
 
 ### Required Environment Variables
 
@@ -176,7 +176,7 @@ Messages are published to Kafka in JSON format:
   },
   "source": {
     "version": "0.1.0",
-    "connector": "pg-replicate-kafka",
+    "connector": "pg-capture",
     "ts_ms": 1634567890100,
     "db": "mydb",
     "schema": "public",
@@ -196,7 +196,7 @@ Messages are published to Kafka in JSON format:
 ## Command Line Options
 
 ```bash
-pg-replicate-kafka [OPTIONS]
+pg-capture [OPTIONS]
 
 OPTIONS:
     -j, --json-logs          Enable JSON output for logs
@@ -211,27 +211,27 @@ OPTIONS:
 
 ```bash
 docker run -d \
-  --name pg-replicate-kafka \
+  --name pg-capture \
   -e PG_DATABASE=mydb \
   -e PG_USERNAME=replicator \
   -e PG_PASSWORD=secret \
   -e KAFKA_BROKERS=kafka:9092 \
-  -v pg-replicate-kafka-data:/var/lib/pg-replicate-kafka \
-  ghcr.io/yourusername/pg-replicate-kafka:latest
+  -v pg-capture-data:/var/lib/pg-capture \
+  ghcr.io/yourusername/pg-capture:latest
 ```
 
 ### Building Custom Image
 
 ```bash
 # Build the image
-docker build -t pg-replicate-kafka:latest .
+docker build -t pg-capture:latest .
 
 # Run with environment variables
 docker run -d \
-  --name pg-replicate-kafka \
+  --name pg-capture \
   --env-file .env \
-  -v pg-replicate-kafka-data:/var/lib/pg-replicate-kafka \
-  pg-replicate-kafka:latest
+  -v pg-capture-data:/var/lib/pg-capture \
+  pg-capture:latest
 ```
 
 ### Local Development with Docker Compose
@@ -240,11 +240,11 @@ docker run -d \
 # Start all services (PostgreSQL, Kafka, Kafka UI)
 docker-compose up -d
 
-# Start with pg-replicate-kafka
+# Start with pg-capture
 docker-compose --profile app up -d
 
 # View logs
-docker-compose logs -f pg-replicate-kafka
+docker-compose logs -f pg-capture
 
 # Run integration tests
 docker-compose -f docker-compose.test.yml up --abort-on-container-exit
@@ -254,7 +254,7 @@ docker-compose -f docker-compose.test.yml up --abort-on-container-exit
 
 ### Logs
 
-pg-replicate-kafka uses structured logging with configurable levels:
+pg-capture uses structured logging with configurable levels:
 
 ```bash
 # Set log level via environment variable
@@ -307,7 +307,7 @@ Future versions will expose Prometheus metrics on port 9090.
 Enable debug logging to see detailed information:
 
 ```bash
-RUST_LOG=pg_replicate_kafka=debug,rdkafka=debug pg-replicate-kafka
+RUST_LOG=pg_replicate_kafka=debug,rdkafka=debug pg-capture
 ```
 
 ## Performance Tuning
@@ -322,7 +322,7 @@ RUST_LOG=pg_replicate_kafka=debug,rdkafka=debug pg-replicate-kafka
 - Use compression for large messages
 - Increase partitions for parallel consumption
 
-### pg-replicate-kafka
+### pg-capture
 - Decrease `poll_interval_ms` for lower latency
 - Increase `checkpoint_interval_secs` for better throughput
 - Use SSD storage for checkpoint files
@@ -333,8 +333,8 @@ RUST_LOG=pg_replicate_kafka=debug,rdkafka=debug pg-replicate-kafka
 
 ```bash
 # Clone repository
-git clone https://github.com/yourusername/pg-replicate-kafka.git
-cd pg-replicate-kafka
+git clone https://github.com/yourusername/pg-capture.git
+cd pg-capture
 
 # Build release binary
 cargo build --release
@@ -348,7 +348,7 @@ cargo test
 
 ### Architecture
 
-pg-replicate-kafka follows a modular architecture:
+pg-capture follows a modular architecture:
 
 - **PostgreSQL Source**: Manages replication connection and protocol
 - **Message Decoder**: Parses pgoutput format messages  

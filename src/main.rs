@@ -4,7 +4,7 @@ use tracing::{error, info};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
 
 #[derive(Parser, Debug)]
-#[command(name = "pg-replicate-kafka")]
+#[command(name = "pg-capture")]
 #[command(about = "PostgreSQL to Kafka CDC replicator", long_about = None)]
 #[command(version)]
 struct Args {
@@ -21,7 +21,7 @@ async fn main() -> Result<()> {
     
     init_logging(args.json_logs, args.verbose);
     
-    info!("Starting pg-replicate-kafka v{}", env!("CARGO_PKG_VERSION"));
+    info!("Starting pg-capture v{}", env!("CARGO_PKG_VERSION"));
     info!("Loading configuration from environment variables");
     
     let config = match Config::from_env() {
