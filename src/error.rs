@@ -62,23 +62,23 @@ pub enum Error {
 
     /// Replication-specific error.
     #[error("Replication error: {message}")]
-    Replication { 
+    Replication {
         /// Description of the replication error
-        message: String 
+        message: String,
     },
 
     /// Invalid or malformed replication message.
     #[error("Invalid message format: {message}")]
-    InvalidMessage { 
+    InvalidMessage {
         /// Description of what was invalid
-        message: String 
+        message: String,
     },
 
     /// Operation timeout.
     #[error("Timeout error: {message}")]
-    Timeout { 
+    Timeout {
         /// Description of what timed out
-        message: String 
+        message: String,
     },
 
     /// Graceful shutdown was requested (e.g., via Ctrl+C).

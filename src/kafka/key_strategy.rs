@@ -2,12 +2,13 @@ use crate::postgres::ChangeEvent;
 use serde_json::Value;
 use tracing::{debug, warn};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub enum KeyStrategy {
     TableName,
     PrimaryKey(Vec<String>),
     FieldPath(String),
     Composite(Vec<String>),
+    #[default]
     None,
 }
 
@@ -105,11 +106,6 @@ fn extract_composite_key(record: &Value, fields: &[String]) -> Option<String> {
     }
 }
 
-impl Default for KeyStrategy {
-    fn default() -> Self {
-        KeyStrategy::None
-    }
-}
 
 #[cfg(test)]
 mod tests {

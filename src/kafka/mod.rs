@@ -18,13 +18,25 @@
 //! ```rust,no_run
 //! use pg_capture::kafka::{KafkaProducer, JsonSerializer, KeyStrategy, SerializationFormat};
 //! use pg_capture::postgres::ChangeEvent;
+//! use pg_capture::config::KafkaConfig;
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
+//!     // Create Kafka configuration
+//!     let kafka_config = KafkaConfig {
+//!         brokers: vec!["localhost:9092".to_string()],
+//!         topic_prefix: "cdc".to_string(),
+//!         compression: "snappy".to_string(),
+//!         acks: "all".to_string(),
+//!         linger_ms: 100,
+//!         batch_size: 16384,
+//!         buffer_memory: 33554432,
+//!     };
+//!     
 //!     // Create producer
 //!     let producer = KafkaProducer::new(
-//!         &["localhost:9092".to_string()],
-//!         &Default::default(),
+//!         &kafka_config.brokers,
+//!         &kafka_config,
 //!     )?;
 //!
 //!     // Create serializer

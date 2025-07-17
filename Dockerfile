@@ -1,18 +1,8 @@
 # Multi-stage Dockerfile for pg-capture
-# Produces a minimal image under 50MB
+# Produces a minimal Debian-based image
 
 # Stage 1: Build
-FROM rust:1.75-alpine AS builder
-
-# Install build dependencies
-RUN apk add --no-cache \
-    musl-dev \
-    openssl-dev \
-    pkgconfig \
-    gcc \
-    g++ \
-    make \
-    cmake
+FROM ghcr.io/kruxia/rust:1.88 AS builder
 
 # Create app directory
 WORKDIR /app
@@ -24,24 +14,27 @@ COPY Cargo.toml Cargo.lock ./
 COPY src ./src
 
 # Build release binary with optimizations
-RUN RUSTFLAGS='-C target-feature=+crt-static' \
-    cargo build --release --target x86_64-unknown-linux-musl
+RUN echo "deb http://deb.debian.org/debian bookworm-backports main" >>/etc/apt/sources.list \
+&& apt update \
+&& apt install -y upx-ucl
+RUN cargo build --release \
+&& upx target/release/pg-capture
 
 # Stage 2: Runtime
-FROM alpine:3.19
+FROM ghcr.io/kruxia/debian:bookworm-slim
 
 # Install runtime dependencies
-RUN apk add --no-cache \
+RUN apt-get update && apt-get install -y \
     ca-certificates \
     tzdata \
-    && rm -rf /var/cache/apk/*
+    && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
-RUN addgroup -g 1000 pgrepkafka && \
-    adduser -D -u 1000 -G pgrepkafka pgrepkafka
+RUN groupadd -g 1000 pgrepkafka && \
+    useradd -u 1000 -g pgrepkafka -m pgrepkafka
 
 # Copy binary from builder
-COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/pg-capture /usr/local/bin/pg-capture
+COPY --from=builder /app/target/release/pg-capture /usr/local/bin/pg-capture
 
 # Create checkpoint directory
 RUN mkdir -p /var/lib/pg-capture && \
@@ -57,13 +50,13 @@ WORKDIR /var/lib/pg-capture
 EXPOSE 9090
 
 # Default command
-ENTRYPOINT ["/usr/local/bin/pg-capture"]
-CMD ["--help"]
+CMD ["/usr/local/bin/pg-capture"]
+# CMD ["--help"]
 
 # Labels
 LABEL org.opencontainers.image.title="pg-capture"
 LABEL org.opencontainers.image.description="PostgreSQL to Kafka CDC replicator"
 LABEL org.opencontainers.image.version="0.1.0"
 LABEL org.opencontainers.image.authors="pg-capture contributors"
-LABEL org.opencontainers.image.source="https://github.com/yourusername/pg-capture"
+LABEL org.opencontainers.image.source="https://github.com/kruxia/pg-capture"
 LABEL org.opencontainers.image.licenses="MPL-2.0"

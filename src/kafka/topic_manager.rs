@@ -18,7 +18,7 @@ impl TopicManager {
         let admin_client: AdminClient<_> = ClientConfig::new()
             .set("bootstrap.servers", brokers.join(","))
             .create()
-            .map_err(|e| Error::Kafka(e))?;
+            .map_err(Error::Kafka)?;
 
         Ok(Self {
             admin_client,
@@ -59,7 +59,7 @@ impl TopicManager {
             .admin_client
             .inner()
             .fetch_metadata(Some(topic_name), Duration::from_secs(5))
-            .map_err(|e| Error::Kafka(e))?;
+            .map_err(Error::Kafka)?;
 
         Ok(metadata
             .topics()
@@ -83,7 +83,7 @@ impl TopicManager {
             .admin_client
             .create_topics(&[new_topic], &opts)
             .await
-            .map_err(|e| Error::Kafka(e))?;
+            .map_err(Error::Kafka)?;
 
         for result in results {
             match result {
@@ -106,7 +106,7 @@ impl TopicManager {
             .admin_client
             .delete_topics(&[topic_name], &opts)
             .await
-            .map_err(|e| Error::Kafka(e))?;
+            .map_err(Error::Kafka)?;
 
         for result in results {
             match result {

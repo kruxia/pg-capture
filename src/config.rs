@@ -13,12 +13,13 @@
 //! let config = Config::from_env().expect("Failed to load config");
 //!
 //! // Access configuration values
-//! println!("Connecting to PostgreSQL at {}:{}", 
+//! println!("Connecting to PostgreSQL at {}:{}",
 //!          config.postgres.host, config.postgres.port);
-//! println!("Publishing to Kafka brokers: {:?}", 
+//! println!("Publishing to Kafka brokers: {:?}",
 //!          config.kafka.brokers);
 //! ```
 
+use crate::Error;
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::path::PathBuf;
@@ -56,17 +57,12 @@ pub struct PostgresConfig {
 /// SSL/TLS connection mode for PostgreSQL.
 ///
 /// Controls whether and how SSL/TLS is used when connecting to PostgreSQL.
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub enum SslMode {
+    #[default]
     Disable,
     Prefer,
     Require,
-}
-
-impl Default for SslMode {
-    fn default() -> Self {
-        SslMode::Disable
-    }
 }
 
 impl std::str::FromStr for SslMode {
@@ -78,8 +74,7 @@ impl std::str::FromStr for SslMode {
             "prefer" => Ok(SslMode::Prefer),
             "require" => Ok(SslMode::Require),
             _ => Err(format!(
-                "Invalid SSL mode: {}. Valid values: disable, prefer, require",
-                s
+                "Invalid SSL mode: {s}. Valid values: disable, prefer, require"
             )),
         }
     }
@@ -146,17 +141,20 @@ impl Config {
     ///
     /// let config = Config::from_env().expect("Failed to load config");
     /// ```
-    pub fn from_env() -> Result<Self, String> {
+    pub fn from_env() -> crate::Result<Self> {
         // PostgreSQL config
         let postgres = PostgresConfig {
             host: env::var("PG_HOST").unwrap_or_else(|_| "localhost".to_string()),
             port: env::var("PG_PORT")
                 .unwrap_or_else(|_| "5432".to_string())
                 .parse::<u16>()
-                .map_err(|_| "PG_PORT must be a valid port number")?,
-            database: env::var("PG_DATABASE").map_err(|_| "PG_DATABASE is required")?,
-            username: env::var("PG_USERNAME").map_err(|_| "PG_USERNAME is required")?,
-            password: env::var("PG_PASSWORD").map_err(|_| "PG_PASSWORD is required")?,
+                .map_err(|_| Error::Config("PG_PORT must be a valid port number".to_string()))?,
+            database: env::var("PG_DATABASE")
+                .map_err(|_| Error::Config("PG_DATABASE is required".to_string()))?,
+            username: env::var("PG_USERNAME")
+                .map_err(|_| Error::Config("PG_USERNAME is required".to_string()))?,
+            password: env::var("PG_PASSWORD")
+                .map_err(|_| Error::Config("PG_PASSWORD is required".to_string()))?,
             publication: env::var("PG_PUBLICATION")
                 .unwrap_or_else(|_| "pg_capture_pub".to_string()),
             slot_name: env::var("PG_SLOT_NAME").unwrap_or_else(|_| "pg_capture_slot".to_string()),
@@ -167,19 +165,21 @@ impl Config {
             ssl_mode: env::var("PG_SSL_MODE")
                 .unwrap_or_else(|_| "disable".to_string())
                 .parse::<SslMode>()
-                .map_err(|e| e)?,
+                .map_err(Error::Config)?,
         };
 
         // Kafka config
         let brokers = env::var("KAFKA_BROKERS")
-            .map_err(|_| "KAFKA_BROKERS is required")?
+            .map_err(|_| Error::Config("KAFKA_BROKERS is required".to_string()))?
             .split(',')
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty())
             .collect::<Vec<_>>();
 
         if brokers.is_empty() {
-            return Err("KAFKA_BROKERS must contain at least one broker".to_string());
+            return Err(Error::Config(
+                "KAFKA_BROKERS must contain at least one broker".to_string(),
+            ));
         }
 
         let kafka = KafkaConfig {
@@ -231,10 +231,10 @@ impl Config {
         })
     }
 
-    /// Constructs a PostgreSQL connection URL for replication.
+    /// Constructs a PostgreSQL connection URL.
     ///
-    /// The URL includes the `replication=database` parameter required
-    /// for logical replication connections.
+    /// This URL is used for regular connections. The replication parameter
+    /// will be added separately when needed for replication protocol.
     ///
     /// # Example
     ///
@@ -242,11 +242,11 @@ impl Config {
     /// # use pg_capture::Config;
     /// # let config = Config::from_env().unwrap();
     /// let url = config.postgres_url();
-    /// // Returns: "postgres://user:pass@host:5432/db?replication=database"
+    /// // Returns: "postgres://user:pass@host:5432/db"
     /// ```
     pub fn postgres_url(&self) -> String {
         format!(
-            "postgres://{}:{}@{}:{}/{}?replication=database",
+            "postgres://{}:{}@{}:{}/{}",
             self.postgres.username,
             self.postgres.password,
             self.postgres.host,
@@ -274,7 +274,7 @@ impl Config {
     /// ```
     #[deprecated(since = "0.1.0", note = "Use kafka.topic_name() instead")]
     pub fn kafka_topic_name(&self, table_name: &str) -> String {
-        format!("{}.{}", self.kafka.topic_prefix, table_name)
+        format!("{}.{table_name}", self.kafka.topic_prefix)
     }
 }
 
@@ -308,6 +308,6 @@ impl KafkaConfig {
     /// assert_eq!(topic, "cdc.public.users");
     /// ```
     pub fn topic_name(&self, schema: &str, table: &str) -> String {
-        format!("{}.{}.{}", self.topic_prefix, schema, table)
+        format!("{}.{schema}.{table}", self.topic_prefix)
     }
 }

@@ -1,12 +1,10 @@
-version: '3.8'
-
 # Docker Compose configuration for integration testing
 # Usage: docker-compose -f docker-compose.test.yml up --abort-on-container-exit --exit-code-from test-runner
 
 services:
   # PostgreSQL for testing
   postgres-test:
-    image: postgres:16-alpine
+    image: ghcr.io/kruxia/postgres:17
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -27,19 +25,22 @@ services:
 
   # Kafka for testing
   kafka-test:
-    image: bitnami/kafka:3.6
+    image: ghcr.io/kruxia/kafka:4.0.0
     environment:
-      KAFKA_CFG_NODE_ID: 0
-      KAFKA_CFG_PROCESS_ROLES: controller,broker
-      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 0@kafka-test:9093
-      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
-      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka-test:9092
-      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
-      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
-      KAFKA_CFG_LOG_RETENTION_HOURS: 1
-      KAFKA_CFG_LOG_SEGMENT_BYTES: 1048576
+      CLUSTER_ID: '5L6g3nShT-eMCtK--X86sw'
+      KAFKA_NODE_ID: 0
+      KAFKA_PROCESS_ROLES: 'controller,broker'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '0@kafka-test:9093'
+      KAFKA_LISTENERS: 'PLAINTEXT://kafka-test:9092,CONTROLLER://kafka-test:9093'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      KAFKA_LOG_DIRS: '/var/lib/kafka/data'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_LOG_RETENTION_HOURS: 1
+      KAFKA_LOG_SEGMENT_BYTES: 1048576
     healthcheck:
       test: ["CMD", "kafka-topics.sh", "--bootstrap-server", "localhost:9092", "--list"]
       interval: 5s
@@ -54,7 +55,7 @@ services:
       context: .
       dockerfile: Dockerfile.test
       args:
-        RUST_VERSION: "1.75"
+        RUST_VERSION: "1.88"
     depends_on:
       postgres-test:
         condition: service_healthy
@@ -79,6 +80,8 @@ services:
       TEST_TIMEOUT_SECONDS: 300
     volumes:
       - ./target:/app/target
+      - ./tests:/app/tests
+      - ./examples:/app/examples
       - cargo-cache:/usr/local/cargo/registry
       - cargo-git:/usr/local/cargo/git
     networks:
@@ -102,7 +105,7 @@ services:
       postgres-test:
         condition: service_healthy
       kafka-test:
-        condition: service_healthy
+        condition: service_started
     environment:
       TEST_PG_HOST: postgres-test
       TEST_PG_PORT: 5432
@@ -113,6 +116,8 @@ services:
       RUST_LOG: pg_capture=info
     volumes:
       - ./target:/app/target
+      - ./tests:/app/tests
+      - ./examples:/app/examples
       - cargo-cache:/usr/local/cargo/registry
     networks:
       - test-network

@@ -102,7 +102,7 @@ impl CheckpointManager {
     /// # use pg_capture::checkpoint::CheckpointManager;
     /// # async fn example() -> pg_capture::Result<()> {
     /// let manager = CheckpointManager::new("checkpoint.json");
-    /// 
+    ///
     /// match manager.load().await? {
     ///     Some(checkpoint) => {
     ///         println!("Found checkpoint at LSN: {}", checkpoint.lsn);
@@ -132,7 +132,7 @@ impl CheckpointManager {
                 }
                 Err(e) => {
                     error!("Failed to parse checkpoint file: {}", e);
-                    Err(Error::Connection(format!("Invalid checkpoint file: {}", e)))
+                    Err(Error::Connection(format!("Invalid checkpoint file: {e}")))
                 }
             },
             Err(e) => {
@@ -165,7 +165,7 @@ impl CheckpointManager {
     /// # async fn example() -> pg_capture::Result<()> {
     /// let manager = CheckpointManager::new("checkpoint.json");
     /// let checkpoint = Checkpoint::new("1234/5678".to_string(), 100);
-    /// 
+    ///
     /// manager.save(&checkpoint).await?;
     /// println!("Checkpoint saved at LSN: {}", checkpoint.lsn);
     /// # Ok(())

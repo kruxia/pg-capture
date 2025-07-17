@@ -81,7 +81,7 @@ impl ReplicationProtocol {
     }
     
     pub async fn drop_slot(&mut self, slot_name: &str) -> Result<()> {
-        let query = format!("DROP_REPLICATION_SLOT {}", slot_name);
+        let query = format!("DROP_REPLICATION_SLOT {slot_name}");
         
         match self.client.simple_query(&query).await {
             Ok(_) => Ok(()),

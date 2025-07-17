@@ -1,7 +1,5 @@
 # Dockerfile for running integration tests
-ARG RUST_VERSION=1.75
-
-FROM rust:${RUST_VERSION} AS test-runner
+FROM ghcr.io/kruxia/rust:1.88 AS test-runner
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -17,11 +15,12 @@ COPY Cargo.toml Cargo.lock ./
 
 # Copy source code
 COPY src ./src
-COPY tests ./tests
-COPY examples ./examples
+
+# Create empty directories for tests and examples (will be mounted as volumes)
+RUN mkdir -p tests examples
 
 # Build dependencies (this layer will be cached)
-RUN cargo build --tests --release
+RUN cargo build --release
 
 # Set test environment
 ENV CARGO_TARGET_DIR=/app/target

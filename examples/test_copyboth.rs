@@ -15,14 +15,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let database = std::env::var("PG_DATABASE").unwrap_or_else(|_| "postgres".to_string());
     let username = std::env::var("PG_USERNAME").unwrap_or_else(|_| "postgres".to_string());
     let password = std::env::var("PG_PASSWORD").unwrap_or_else(|_| "postgres".to_string());
-    
+
     let connection_string = format!(
         "postgres://{}:{}@{}:{}/{}?replication=database",
         username, password, host, port, database
     );
-    
-    let slot_name =
-        std::env::var("PG_SLOT_NAME").unwrap_or_else(|_| "test_slot".to_string());
+
+    let slot_name = std::env::var("PG_SLOT_NAME").unwrap_or_else(|_| "test_slot".to_string());
     let publication_name =
         std::env::var("PG_PUBLICATION").unwrap_or_else(|_| "test_pub".to_string());
 

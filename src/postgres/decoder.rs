@@ -206,7 +206,7 @@ impl PgOutputDecoder {
 
         if tuple_type != b'N' {
             return Err(Error::InvalidMessage {
-                message: format!("Unexpected tuple type in INSERT: {}", tuple_type),
+                message: format!("Unexpected tuple type in INSERT: {tuple_type}"),
             });
         }
 
@@ -214,7 +214,7 @@ impl PgOutputDecoder {
             .relations
             .get(&rel_id)
             .ok_or_else(|| Error::InvalidMessage {
-                message: format!("Unknown relation ID: {}", rel_id),
+                message: format!("Unknown relation ID: {rel_id}"),
             })?;
 
         let tuple_data = self.decode_tuple_data(&mut cursor, &relation.columns)?;
@@ -250,7 +250,7 @@ impl PgOutputDecoder {
             .relations
             .get(&rel_id)
             .ok_or_else(|| Error::InvalidMessage {
-                message: format!("Unknown relation ID: {}", rel_id),
+                message: format!("Unknown relation ID: {rel_id}"),
             })?;
 
         let mut old_tuple = None;
@@ -276,7 +276,7 @@ impl PgOutputDecoder {
                 }
                 _ => {
                     return Err(Error::InvalidMessage {
-                        message: format!("Unexpected tuple type in UPDATE: {}", tuple_type),
+                        message: format!("Unexpected tuple type in UPDATE: {tuple_type}"),
                     });
                 }
             }
@@ -313,7 +313,7 @@ impl PgOutputDecoder {
 
         if tuple_type != b'O' && tuple_type != b'K' {
             return Err(Error::InvalidMessage {
-                message: format!("Unexpected tuple type in DELETE: {}", tuple_type),
+                message: format!("Unexpected tuple type in DELETE: {tuple_type}"),
             });
         }
 
@@ -321,7 +321,7 @@ impl PgOutputDecoder {
             .relations
             .get(&rel_id)
             .ok_or_else(|| Error::InvalidMessage {
-                message: format!("Unknown relation ID: {}", rel_id),
+                message: format!("Unknown relation ID: {rel_id}"),
             })?;
 
         let old_tuple = self.decode_tuple_data(&mut cursor, &relation.columns)?;
@@ -408,7 +408,7 @@ impl PgOutputDecoder {
                 }
                 _ => {
                     return Err(Error::InvalidMessage {
-                        message: format!("Unknown column type: {}", col_type),
+                        message: format!("Unknown column type: {col_type}"),
                     });
                 }
             }
@@ -642,7 +642,7 @@ pub fn parse_postgres_binary_value(data: &[u8], type_id: u32) -> serde_json::Val
     match type_id {
         16 => {
             // bool
-            if data.len() >= 1 {
+            if !data.is_empty() {
                 serde_json::Value::Bool(data[0] != 0)
             } else {
                 serde_json::Value::Null
@@ -724,7 +724,7 @@ pub fn parse_postgres_binary_value(data: &[u8], type_id: u32) -> serde_json::Val
             );
             use base64::{engine::general_purpose, Engine as _};
             let encoded = general_purpose::STANDARD.encode(data);
-            serde_json::Value::String(format!("base64:{}", encoded))
+            serde_json::Value::String(format!("base64:{encoded}"))
         }
     }
 }
